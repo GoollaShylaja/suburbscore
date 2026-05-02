@@ -14,7 +14,7 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: false
+    show-sql: true
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -37,6 +37,11 @@ management:
   endpoint:
     health:
       show-details: always
+
+app:
+  jwt:
+    secret: suburbscore-super-secret-jwt-key-must-be-256-bits-long!!
+    expiration-ms: 86400000
 
 logging:
   level:
