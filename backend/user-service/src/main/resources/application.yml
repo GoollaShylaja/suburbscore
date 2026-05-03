@@ -7,8 +7,8 @@ spring:
 
   datasource:
     url: jdbc:postgresql://localhost:5433/suburbscore
-    username: suburbscore
-    password: suburbscore123
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -40,8 +40,8 @@ management:
 
 app:
   jwt:
-    secret: suburbscore-super-secret-jwt-key-must-be-256-bits-long!!
-    expiration-ms: 86400000
+    secret: ${JWT_SECRET}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
 
 logging:
   level:
