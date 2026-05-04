@@ -7,8 +7,8 @@ spring:
 
   datasource:
     url: jdbc:postgresql://localhost:5433/suburbscore
-    username: suburbscore
-    password: suburbscore123
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -27,8 +27,10 @@ spring:
 
   cache:
     type: redis
-    redis:
-      time-to-live: 3600000
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
 
 eureka:
   client:
@@ -43,10 +45,22 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health
   endpoint:
     health:
-      show-details: always
+      show-details: never
+
+springdoc:
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:false}
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:false}
+
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
 
 logging:
   level:
@@ -60,6 +74,10 @@ spring:
 
   datasource:
     url: jdbc:postgresql://postgres:5432/suburbscore
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
 
   data:
     redis:
