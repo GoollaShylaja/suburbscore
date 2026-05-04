@@ -8,6 +8,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -21,6 +22,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.net.URI;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -28,6 +30,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
     private final UserDetailsService userDetailsService;
     private final ObjectMapper objectMapper;
+    private final TokenBlacklistService tokenBlacklistService;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -43,6 +46,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = authHeader.substring(7);
         try {
             if (SecurityContextHolder.getContext().getAuthentication() == null) {
+                String jti = jwtUtil.extractJti(token);
+                if (tokenBlacklistService.isBlacklisted(jti)) {
+                    log.warn("Revoked token used from IP: {}", request.getRemoteAddr());
+                    writeProblemDetail(response, request, HttpStatus.UNAUTHORIZED, "Token has been revoked");
+                    return;
+                }
+
                 String email = jwtUtil.extractEmail(token);
                 UserDetails userDetails = userDetailsService.loadUserByUsername(email);
                 UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
@@ -51,9 +61,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 SecurityContextHolder.getContext().setAuthentication(auth);
             }
         } catch (ExpiredJwtException e) {
+            log.warn("Expired JWT token from IP: {}", request.getRemoteAddr());
             writeProblemDetail(response, request, HttpStatus.UNAUTHORIZED, "Token has expired");
             return;
         } catch (JwtException e) {
+            log.warn("Invalid JWT token from IP: {}", request.getRemoteAddr());
             writeProblemDetail(response, request, HttpStatus.UNAUTHORIZED, "Invalid token");
             return;
         }

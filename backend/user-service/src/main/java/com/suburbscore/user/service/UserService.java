@@ -8,14 +8,20 @@ import com.suburbscore.user.exception.ResourceNotFoundException;
 import com.suburbscore.user.repository.UserPreferencesRepository;
 import com.suburbscore.user.repository.UserRepository;
 import com.suburbscore.user.security.JwtUtil;
+import com.suburbscore.user.security.TokenBlacklistService;
+import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -25,11 +31,13 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final AuthenticationManager authenticationManager;
+    private final TokenBlacklistService tokenBlacklistService;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.email())) {
-            throw new ConflictException("Email already registered: " + request.email());
+            log.warn("Registration attempt with already-registered email: {}", request.email());
+            throw new ConflictException("Registration could not be completed");
         }
 
         User user = new User();
@@ -101,6 +109,16 @@ public class UserService {
         return isNew
                 ? ResponseEntity.status(201).body(response)
                 : ResponseEntity.ok(response);
+    }
+
+    public void logout(String token) {
+        try {
+            String jti = jwtUtil.extractJti(token);
+            Instant expiry = jwtUtil.extractExpiration(token).toInstant();
+            tokenBlacklistService.blacklist(jti, expiry);
+        } catch (JwtException e) {
+            // Token already invalid — nothing to blacklist
+        }
     }
 
     private AuthResponse buildAuthResponse(String token, User user) {

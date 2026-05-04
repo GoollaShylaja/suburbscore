@@ -199,4 +199,22 @@ public class UserController {
             @Valid @RequestBody PreferencesRequest request) {
         return userService.savePreferences(userDetails.getUsername(), request);
     }
+
+    // ── POST /logout ──────────────────────────────────────────────────────────
+
+    @Operation(summary = "Logout",
+               description = "Invalidates the current JWT token. The token cannot be used again after this call.",
+               security = @SecurityRequirement(name = "Bearer"))
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "Logged out successfully"),
+        @ApiResponse(responseCode = "401", description = "Missing or invalid token",
+            content = @Content(mediaType = "application/problem+json"))
+    })
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(@RequestHeader("Authorization") String authHeader) {
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            userService.logout(authHeader.substring(7));
+        }
+        return ResponseEntity.noContent().build();
+    }
 }

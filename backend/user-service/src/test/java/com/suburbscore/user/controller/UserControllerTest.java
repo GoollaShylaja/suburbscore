@@ -166,7 +166,7 @@ class UserControllerTest {
         @DisplayName("duplicate email — 409 Conflict")
         void duplicateEmail_returns409() throws Exception {
             when(userService.register(any()))
-                    .thenThrow(new ConflictException("Email already registered: " + EMAIL));
+                    .thenThrow(new ConflictException("Registration could not be completed"));
 
             mockMvc.perform(post("/api/users/register")
                             .contentType(MediaType.APPLICATION_JSON)
@@ -179,7 +179,7 @@ class UserControllerTest {
                                 }"""))
                     .andExpect(status().isConflict())
                     .andExpect(jsonPath("$.status").value(409))
-                    .andExpect(jsonPath("$.detail").value("Email already registered: " + EMAIL));
+                    .andExpect(jsonPath("$.detail").value("Registration could not be completed"));
         }
     }
 
@@ -287,6 +287,26 @@ class UserControllerTest {
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.status").value(404))
                     .andExpect(jsonPath("$.detail").value("User not found: " + EMAIL));
+        }
+    }
+
+    // ── POST /logout ──────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("POST /api/users/logout")
+    class Logout {
+
+        @Test
+        @WithMockUser(username = "john.smith@example.com")
+        @DisplayName("valid token — 204 No Content")
+        void validToken_returns204() throws Exception {
+            doNothing().when(userService).logout(anyString());
+
+            mockMvc.perform(post("/api/users/logout")
+                            .header("Authorization", "Bearer " + TOKEN))
+                    .andExpect(status().isNoContent());
+
+            verify(userService).logout(TOKEN);
         }
     }
 

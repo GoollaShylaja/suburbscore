@@ -7,6 +7,7 @@ import com.suburbscore.user.exception.ResourceNotFoundException;
 import com.suburbscore.user.repository.UserPreferencesRepository;
 import com.suburbscore.user.repository.UserRepository;
 import com.suburbscore.user.security.JwtUtil;
+import com.suburbscore.user.security.TokenBlacklistService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -38,6 +40,7 @@ class UserServiceTest {
     @Mock PasswordEncoder passwordEncoder;
     @Mock JwtUtil jwtUtil;
     @Mock AuthenticationManager authenticationManager;
+    @Mock TokenBlacklistService tokenBlacklistService;
 
     @InjectMocks UserService userService;
 
@@ -90,6 +93,25 @@ class UserServiceTest {
         return prefs;
     }
 
+    // ── logout ────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("logout()")
+    class Logout {
+
+        @Test
+        @DisplayName("valid token — blacklists the JTI")
+        void blacklistsToken() {
+            String jti = "some-jti-uuid";
+            when(jwtUtil.extractJti(TOKEN)).thenReturn(jti);
+            when(jwtUtil.extractExpiration(TOKEN)).thenReturn(new Date(System.currentTimeMillis() + 86400000));
+
+            userService.logout(TOKEN);
+
+            verify(tokenBlacklistService).blacklist(eq(jti), any());
+        }
+    }
+
     // ── register ─────────────────────────────────────────────────────────────
 
     @Nested
@@ -130,7 +152,7 @@ class UserServiceTest {
 
             assertThatThrownBy(() -> userService.register(registerRequest()))
                     .isInstanceOf(ConflictException.class)
-                    .hasMessageContaining(EMAIL);
+                    .hasMessageContaining("Registration could not be completed");
 
             verify(userRepository, never()).save(any());
         }

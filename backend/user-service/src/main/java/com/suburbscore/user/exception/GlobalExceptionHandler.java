@@ -1,5 +1,6 @@
 package com.suburbscore.user.exception;
 
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -39,7 +40,8 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler({BadCredentialsException.class, UsernameNotFoundException.class})
-    public ProblemDetail handleBadCredentials(RuntimeException ex) {
+    public ProblemDetail handleBadCredentials(RuntimeException ex, HttpServletRequest request) {
+        log.warn("Failed authentication attempt from IP: {}", request.getRemoteAddr());
         return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "Invalid email or password");
     }
 
