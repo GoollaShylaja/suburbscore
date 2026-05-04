@@ -92,6 +92,17 @@ as part of the SuburbScore platform (Sydney suburb intelligence app).
 - All secrets via ${ENV_VAR} placeholders
 - springdoc disabled by default, enabled via SWAGGER_ENABLED=true
 
+### README.md — required for every service
+Each service must have a README.md covering:
+- What the service does (1-2 lines)
+- Prerequisites (Java version, Docker)
+- Setup steps (copy .env, start DB, run service)
+- API endpoint table (method, path, auth, description)
+- Swagger UI URL
+- How to run tests (with test count)
+- Environment variables table (variable, description, example)
+- Security summary (auth mechanism, rate limiting, notable behaviours)
+
 ### Git commit style
 - Use conventional commits: feat, fix, docs, test, chore, refactor
 - Split swagger changes and test changes into separate commits
