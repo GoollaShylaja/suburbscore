@@ -2,9 +2,10 @@ package com.suburbscore.suburb.service;
 
 import com.suburbscore.suburb.dto.*;
 import com.suburbscore.suburb.entity.*;
+import com.suburbscore.suburb.enums.PropertyType;
 import com.suburbscore.suburb.exception.ResourceNotFoundException;
+import com.suburbscore.suburb.exception.SuburbNotFoundException;
 import com.suburbscore.suburb.repository.*;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -23,7 +24,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -34,6 +35,8 @@ class SuburbServiceTest {
     @Mock SuburbStatsRepository suburbStatsRepository;
     @Mock TransportDataRepository transportDataRepository;
     @Mock SchoolDataRepository schoolDataRepository;
+    @Mock SuburbRentByTypeRepository rentByTypeRepository;
+    @Mock SavedSuburbRepository savedSuburbRepository;
 
     @InjectMocks SuburbService suburbService;
 
@@ -45,7 +48,7 @@ class SuburbServiceTest {
         s.setName("Newtown");
         s.setPostcode("2042");
         s.setLga("Inner West Council");
-        s.setRegion("Inner West");
+        s.setRegion("INNER_WEST");
         s.setLatitude(new BigDecimal("-33.897900"));
         s.setLongitude(new BigDecimal("151.179200"));
         s.setCreatedAt(LocalDateTime.of(2026, 1, 1, 0, 0));
@@ -60,6 +63,12 @@ class SuburbServiceTest {
         st.setMedianRentWeekly(650);
         st.setCrimeIndex(new BigDecimal("45.0"));
         st.setWalkabilityScore(new BigDecimal("88.0"));
+        st.setWalkabilityAmenityCount(47);
+        st.setParksCount(8);
+        st.setPctHouses(45);
+        st.setPctApartments(38);
+        st.setPctTownhouses(10);
+        st.setPctUnits(7);
         st.setPopulation(15420);
         st.setMedianAge(29);
         st.setUnemploymentRate(new BigDecimal("5.80"));
@@ -86,43 +95,40 @@ class SuburbServiceTest {
         sc.setSuburb(suburb);
         sc.setNumPrimarySchools(2);
         sc.setNumHighSchools(1);
-        sc.setAvgNaplanScore(new BigDecimal("520.0"));
+        sc.setAvgIcseaScore(new BigDecimal("1087.50"));
         sc.setBestSchoolName("Newtown High School of the Performing Arts");
+        sc.setDataAvailable(true);
         sc.setUpdatedAt(LocalDateTime.now());
         return sc;
     }
 
-    // ── findAll ───────────────────────────────────────────────────────────────
+    // ── getAllSuburbs ─────────────────────────────────────────────────────────
 
     @Nested
-    @DisplayName("findAll")
-    class FindAll {
+    @DisplayName("getAllSuburbs")
+    class GetAllSuburbs {
 
         @Test
-        @DisplayName("returns page of suburb summaries")
-        void returnsPageOfSummaries() {
-            Suburb suburb = buildSuburb();
-            Page<Suburb> page = new PageImpl<>(List.of(suburb));
+        @DisplayName("returns paged response with suburb summaries")
+        void returnsPagedResponse() {
+            Page<Suburb> page = new PageImpl<>(List.of(buildSuburb()), PageRequest.of(0, 20), 1);
             when(suburbRepository.findAll(any(PageRequest.class))).thenReturn(page);
 
-            Page<SuburbSummaryResponse> result = suburbService.findAll(PageRequest.of(0, 20));
+            PagedSuburbResponse result = suburbService.getAllSuburbs(0, 20, "name");
 
-            assertThat(result.getTotalElements()).isEqualTo(1);
-            SuburbSummaryResponse summary = result.getContent().get(0);
-            assertThat(summary.id()).isEqualTo(SUBURB_ID);
-            assertThat(summary.name()).isEqualTo("Newtown");
-            assertThat(summary.postcode()).isEqualTo("2042");
-            assertThat(summary.region()).isEqualTo("Inner West");
+            assertThat(result.totalElements()).isEqualTo(1);
+            assertThat(result.currentPage()).isZero();
+            assertThat(result.suburbs().get(0).name()).isEqualTo("Newtown");
         }
 
         @Test
-        @DisplayName("returns empty page when no suburbs exist")
+        @DisplayName("returns empty paged response when no suburbs exist")
         void returnsEmptyPage() {
             when(suburbRepository.findAll(any(PageRequest.class))).thenReturn(Page.empty());
 
-            Page<SuburbSummaryResponse> result = suburbService.findAll(PageRequest.of(0, 20));
+            PagedSuburbResponse result = suburbService.getAllSuburbs(0, 20, "name");
 
-            assertThat(result.getTotalElements()).isZero();
+            assertThat(result.totalElements()).isZero();
         }
     }
 
@@ -133,41 +139,39 @@ class SuburbServiceTest {
     class FindById {
 
         @Test
-        @DisplayName("returns full detail when suburb exists with all related data")
+        @DisplayName("returns full detail with all related data")
         void found_returnsDetailResponse() {
             Suburb suburb = buildSuburb();
             when(suburbRepository.findById(SUBURB_ID)).thenReturn(Optional.of(suburb));
             when(suburbStatsRepository.findBySuburbId(SUBURB_ID)).thenReturn(Optional.of(buildStats(suburb)));
             when(transportDataRepository.findBySuburbId(SUBURB_ID)).thenReturn(Optional.of(buildTransport(suburb)));
             when(schoolDataRepository.findBySuburbId(SUBURB_ID)).thenReturn(Optional.of(buildSchools(suburb)));
+            when(rentByTypeRepository.findBySuburbId(SUBURB_ID)).thenReturn(List.of());
 
             SuburbDetailResponse result = suburbService.findById(SUBURB_ID);
 
             assertThat(result.id()).isEqualTo(SUBURB_ID);
-            assertThat(result.name()).isEqualTo("Newtown");
-            assertThat(result.stats()).isNotNull();
             assertThat(result.stats().medianRentWeekly()).isEqualTo(650);
-            assertThat(result.stats().transport()).isNotNull();
-            assertThat(result.stats().transport().nearestTrainStation()).isEqualTo("Newtown Station");
-            assertThat(result.stats().schools()).isNotNull();
-            assertThat(result.stats().schools().avgNaplanScore()).isEqualByComparingTo("520.0");
+            assertThat(result.transport().nearestTrainStation()).isEqualTo("Newtown Station");
+            assertThat(result.schoolData().avgIcseaScore()).isEqualByComparingTo("1087.50");
+            assertThat(result.schoolData().dataAvailable()).isTrue();
         }
 
         @Test
-        @DisplayName("returns detail with null nested data when no stats have been loaded yet")
-        void found_missingRelatedData_returnsNullFields() {
+        @DisplayName("returns empty DTOs when no related data loaded yet")
+        void found_missingRelatedData_returnsEmptyDTOs() {
             Suburb suburb = buildSuburb();
             when(suburbRepository.findById(SUBURB_ID)).thenReturn(Optional.of(suburb));
             when(suburbStatsRepository.findBySuburbId(SUBURB_ID)).thenReturn(Optional.empty());
             when(transportDataRepository.findBySuburbId(SUBURB_ID)).thenReturn(Optional.empty());
             when(schoolDataRepository.findBySuburbId(SUBURB_ID)).thenReturn(Optional.empty());
+            when(rentByTypeRepository.findBySuburbId(SUBURB_ID)).thenReturn(List.of());
 
             SuburbDetailResponse result = suburbService.findById(SUBURB_ID);
 
-            assertThat(result.id()).isEqualTo(SUBURB_ID);
             assertThat(result.stats().medianRentWeekly()).isNull();
-            assertThat(result.stats().transport()).isNull();
-            assertThat(result.stats().schools()).isNull();
+            assertThat(result.transport().nearestTrainStation()).isNull();
+            assertThat(result.schoolData().dataAvailable()).isFalse();
         }
 
         @Test
@@ -188,13 +192,14 @@ class SuburbServiceTest {
     class FindByPostcode {
 
         @Test
-        @DisplayName("returns list of suburbs matching the postcode")
+        @DisplayName("returns suburbs for valid postcode")
         void found_returnsList() {
             Suburb suburb = buildSuburb();
             when(suburbRepository.findByPostcodeOrderByNameAsc("2042")).thenReturn(List.of(suburb));
             when(suburbStatsRepository.findBySuburbId(SUBURB_ID)).thenReturn(Optional.of(buildStats(suburb)));
             when(transportDataRepository.findBySuburbId(SUBURB_ID)).thenReturn(Optional.empty());
             when(schoolDataRepository.findBySuburbId(SUBURB_ID)).thenReturn(Optional.empty());
+            when(rentByTypeRepository.findBySuburbId(SUBURB_ID)).thenReturn(List.of());
 
             List<SuburbDetailResponse> result = suburbService.findByPostcode("2042");
 
@@ -203,7 +208,7 @@ class SuburbServiceTest {
         }
 
         @Test
-        @DisplayName("throws ResourceNotFoundException when no suburbs match the postcode")
+        @DisplayName("throws ResourceNotFoundException when no suburbs match postcode")
         void notFound_throwsException() {
             when(suburbRepository.findByPostcodeOrderByNameAsc("9999")).thenReturn(List.of());
 
@@ -213,53 +218,141 @@ class SuburbServiceTest {
         }
     }
 
-    // ── findStatsBySuburbId ───────────────────────────────────────────────────
+    // ── getSuburbStats ────────────────────────────────────────────────────────
 
     @Nested
-    @DisplayName("findStatsBySuburbId")
-    class FindStats {
+    @DisplayName("getSuburbStats")
+    class GetStats {
 
         @Test
-        @DisplayName("returns stats when suburb and all related data exist")
+        @DisplayName("returns stats with all new fields when data exists")
         void found_returnsStats() {
             Suburb suburb = buildSuburb();
             when(suburbRepository.existsById(SUBURB_ID)).thenReturn(true);
             when(suburbStatsRepository.findBySuburbId(SUBURB_ID)).thenReturn(Optional.of(buildStats(suburb)));
-            when(transportDataRepository.findBySuburbId(SUBURB_ID)).thenReturn(Optional.of(buildTransport(suburb)));
-            when(schoolDataRepository.findBySuburbId(SUBURB_ID)).thenReturn(Optional.of(buildSchools(suburb)));
 
-            SuburbStatsResponse result = suburbService.findStatsBySuburbId(SUBURB_ID);
+            SuburbStatsResponse result = suburbService.getSuburbStats(SUBURB_ID);
 
             assertThat(result.medianRentWeekly()).isEqualTo(650);
-            assertThat(result.crimeIndex()).isEqualByComparingTo("45.0");
-            assertThat(result.walkabilityScore()).isEqualByComparingTo("88.0");
-            assertThat(result.transport().cbdCommuteMinsTrain()).isEqualTo(18);
-            assertThat(result.schools().numHighSchools()).isEqualTo(1);
+            assertThat(result.walkabilityAmenityCount()).isEqualTo(47);
+            assertThat(result.parksCount()).isEqualTo(8);
+            assertThat(result.pctHouses()).isEqualTo(45);
         }
 
         @Test
-        @DisplayName("throws ResourceNotFoundException when suburb does not exist")
+        @DisplayName("returns empty DTO when stats not yet loaded")
+        void missingData_returnsEmptyDTO() {
+            when(suburbRepository.existsById(SUBURB_ID)).thenReturn(true);
+            when(suburbStatsRepository.findBySuburbId(SUBURB_ID)).thenReturn(Optional.empty());
+
+            SuburbStatsResponse result = suburbService.getSuburbStats(SUBURB_ID);
+
+            assertThat(result.suburbId()).isEqualTo(SUBURB_ID);
+            assertThat(result.medianRentWeekly()).isNull();
+        }
+
+        @Test
+        @DisplayName("throws SuburbNotFoundException when suburb does not exist")
         void suburbNotFound_throwsException() {
             when(suburbRepository.existsById(SUBURB_ID)).thenReturn(false);
 
-            assertThatThrownBy(() -> suburbService.findStatsBySuburbId(SUBURB_ID))
-                    .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("Suburb not found");
+            assertThatThrownBy(() -> suburbService.getSuburbStats(SUBURB_ID))
+                    .isInstanceOf(SuburbNotFoundException.class);
+        }
+    }
+
+    // ── getSchoolData ─────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("getSchoolData")
+    class GetSchoolData {
+
+        @Test
+        @DisplayName("returns school data with dataAvailable=true when loaded")
+        void found_returnsSchoolData() {
+            Suburb suburb = buildSuburb();
+            when(suburbRepository.existsById(SUBURB_ID)).thenReturn(true);
+            when(schoolDataRepository.findBySuburbId(SUBURB_ID)).thenReturn(Optional.of(buildSchools(suburb)));
+
+            SchoolDataResponse result = suburbService.getSchoolData(SUBURB_ID);
+
+            assertThat(result.dataAvailable()).isTrue();
+            assertThat(result.numPrimarySchools()).isEqualTo(2);
+            assertThat(result.avgIcseaScore()).isEqualByComparingTo("1087.50");
         }
 
         @Test
-        @DisplayName("returns response with null fields when no data has been ingested yet")
-        void missingData_returnsNullFields() {
+        @DisplayName("returns notYetAvailable DTO when school data not loaded")
+        void notAvailable_returnsDefaultDTO() {
             when(suburbRepository.existsById(SUBURB_ID)).thenReturn(true);
+            when(schoolDataRepository.findBySuburbId(SUBURB_ID)).thenReturn(Optional.empty());
+
+            SchoolDataResponse result = suburbService.getSchoolData(SUBURB_ID);
+
+            assertThat(result.dataAvailable()).isFalse();
+            assertThat(result.numPrimarySchools()).isZero();
+        }
+    }
+
+    // ── getRentByBedroomsAndType ──────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("getRentByBedroomsAndType")
+    class GetRentByType {
+
+        @Test
+        @DisplayName("returns rent DTO when record exists")
+        void found_returnsRentDTO() {
+            Suburb suburb = buildSuburb();
+            SuburbRentByType rent = SuburbRentByType.builder()
+                    .id(UUID.randomUUID()).suburb(suburb)
+                    .bedrooms(2).propertyType(PropertyType.APARTMENT)
+                    .medianRentWeekly(620).updatedAt(LocalDateTime.now())
+                    .build();
+            when(rentByTypeRepository.findBySuburbIdAndBedroomsAndPropertyType(
+                    SUBURB_ID, 2, PropertyType.APARTMENT)).thenReturn(Optional.of(rent));
+
+            var result = suburbService.getRentByBedroomsAndType(SUBURB_ID, 2, PropertyType.APARTMENT);
+
+            assertThat(result).isPresent();
+            assertThat(result.get().medianRentWeekly()).isEqualTo(620);
+            assertThat(result.get().propertyType()).isEqualTo("APARTMENT");
+        }
+
+        @Test
+        @DisplayName("returns empty Optional when record not found")
+        void notFound_returnsEmpty() {
+            when(rentByTypeRepository.findBySuburbIdAndBedroomsAndPropertyType(
+                    SUBURB_ID, 5, PropertyType.STUDIO)).thenReturn(Optional.empty());
+
+            var result = suburbService.getRentByBedroomsAndType(SUBURB_ID, 5, PropertyType.STUDIO);
+
+            assertThat(result).isEmpty();
+        }
+    }
+
+    // ── getBulkSuburbDetails ──────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("getBulkSuburbDetails")
+    class GetBulkDetails {
+
+        @Test
+        @DisplayName("returns details for found IDs and skips missing ones")
+        void returnsFoundSuburbs() {
+            Suburb suburb = buildSuburb();
+            UUID missing = UUID.randomUUID();
+            when(suburbRepository.findById(SUBURB_ID)).thenReturn(Optional.of(suburb));
+            when(suburbRepository.findById(missing)).thenReturn(Optional.empty());
             when(suburbStatsRepository.findBySuburbId(SUBURB_ID)).thenReturn(Optional.empty());
             when(transportDataRepository.findBySuburbId(SUBURB_ID)).thenReturn(Optional.empty());
             when(schoolDataRepository.findBySuburbId(SUBURB_ID)).thenReturn(Optional.empty());
+            when(rentByTypeRepository.findBySuburbId(SUBURB_ID)).thenReturn(List.of());
 
-            SuburbStatsResponse result = suburbService.findStatsBySuburbId(SUBURB_ID);
+            List<SuburbDetailResponse> result = suburbService.getBulkSuburbDetails(List.of(SUBURB_ID, missing));
 
-            assertThat(result.medianRentWeekly()).isNull();
-            assertThat(result.transport()).isNull();
-            assertThat(result.schools()).isNull();
+            assertThat(result).hasSize(1);
+            assertThat(result.get(0).id()).isEqualTo(SUBURB_ID);
         }
     }
 }

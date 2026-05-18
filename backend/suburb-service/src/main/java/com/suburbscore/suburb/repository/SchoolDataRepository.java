@@ -8,4 +8,6 @@ import java.util.UUID;
 
 public interface SchoolDataRepository extends JpaRepository<SchoolData, UUID> {
     Optional<SchoolData> findBySuburbId(UUID suburbId);
+
+    boolean existsByDataAvailableTrue();
 }

@@ -13,6 +13,7 @@ import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSeriali
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 
 import java.time.Duration;
+import java.util.Map;
 
 @Configuration
 @EnableCaching
@@ -29,14 +30,27 @@ public class CacheConfig {
 
         GenericJackson2JsonRedisSerializer serializer = new GenericJackson2JsonRedisSerializer(mapper);
 
-        RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
-                .entryTtl(Duration.ofHours(1))
+        RedisCacheConfiguration defaults = RedisCacheConfiguration.defaultCacheConfig()
                 .disableCachingNullValues()
                 .serializeValuesWith(
                         RedisSerializationContext.SerializationPair.fromSerializer(serializer));
 
+        Map<String, RedisCacheConfiguration> cacheConfigs = Map.of(
+                "suburb:list",      defaults.entryTtl(Duration.ofHours(24)),
+                "suburb:detail",    defaults.entryTtl(Duration.ofHours(24)),
+                "suburb:region",    defaults.entryTtl(Duration.ofHours(24)),
+                "suburb:search",    defaults.entryTtl(Duration.ofHours(24)),
+                "suburb:postcode",  defaults.entryTtl(Duration.ofHours(24)),
+                "suburb:stats",     defaults.entryTtl(Duration.ofHours(12)),
+                "suburb:transport", defaults.entryTtl(Duration.ofHours(12)),
+                "suburb:schools",   defaults.entryTtl(Duration.ofHours(12)),
+                "suburb:rent",      defaults.entryTtl(Duration.ofHours(12)),
+                "suburb:saved",     defaults.entryTtl(Duration.ofMinutes(30))
+        );
+
         return RedisCacheManager.builder(connectionFactory)
-                .cacheDefaults(config)
+                .cacheDefaults(defaults.entryTtl(Duration.ofHours(1)))
+                .withInitialCacheConfigurations(cacheConfigs)
                 .build();
     }
 }

@@ -4,14 +4,18 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
 @Table(name = "suburbs",
        uniqueConstraints = @UniqueConstraint(columnNames = {"postcode", "name"}))
+@SQLRestriction("is_deleted = false")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -27,6 +31,10 @@ public class Suburb {
     @Column(nullable = false, length = 4)
     private String postcode;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "city_id")
+    private City city;
+
     @Column(length = 100)
     private String lga;
 
@@ -38,6 +46,12 @@ public class Suburb {
 
     @Column(length = 50)
     private String region;
+
+    @Column(name = "is_deleted", nullable = false)
+    private boolean isDeleted = false;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -53,6 +67,9 @@ public class Suburb {
 
     @OneToOne(mappedBy = "suburb", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private SchoolData schoolData;
+
+    @OneToMany(mappedBy = "suburb", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<SuburbRentByType> rentData = new ArrayList<>();
 
     @PrePersist
     void prePersist() {

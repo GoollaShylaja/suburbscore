@@ -6,7 +6,7 @@ spring:
     name: suburb-service
 
   datasource:
-    url: jdbc:postgresql://localhost:5433/suburbscore
+    url: jdbc:postgresql://localhost:5433/suburbscore_suburbs
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
@@ -32,8 +32,17 @@ spring:
     serialization:
       write-dates-as-timestamps: false
 
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: false
+
 eureka:
   client:
+    enabled: false
     service-url:
       defaultZone: http://localhost:8761/eureka/
     registry-fetch-interval-seconds: 5
@@ -62,6 +71,39 @@ app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
 
+postcodeapi:
+  base-url: http://v0.postcodeapi.com.au
+  min-postcode: 2000
+  max-postcode: 2770
+
+nsw:
+  schools:
+    api:
+      url: https://data.nsw.gov.au/data/api/3/action/datastore_search
+      resource-id: 3e6d5f6a-055c-440d-a690-fc0537c31095
+      page-size: 1000
+
+external:
+  api:
+    connect-timeout: 10000   # 10s connect timeout for slow government APIs
+    read-timeout: 30000      # 30s read timeout for bulk data fetches
+
+transport:
+  nsw:
+    base-url: https://api.transport.nsw.gov.au
+    api-key: ${TRANSPORT_NSW_API_KEY:}
+
+osm:
+  overpass:
+    url: https://overpass-api.de/api/interpreter
+
+data:
+  dir: ${DATA_DIR:./data}
+
+kafka:
+  topic:
+    suburb-data-updated: suburb-data-updated
+
 logging:
   level:
     com.suburbscore.suburb: INFO
@@ -73,7 +115,7 @@ spring:
       on-profile: docker
 
   datasource:
-    url: jdbc:postgresql://postgres:5432/suburbscore
+    url: jdbc:postgresql://postgres:5432/suburbscore_suburbs
 
   jpa:
     hibernate:
@@ -85,5 +127,6 @@ spring:
 
 eureka:
   client:
+    enabled: true
     service-url:
       defaultZone: http://eureka-server:8761/eureka/

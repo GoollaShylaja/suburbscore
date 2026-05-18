@@ -27,18 +27,31 @@ public class SuburbStats {
     @Column(name = "median_rent_weekly")
     private Integer medianRentWeekly;
 
-    @Column(name = "median_rent_updated_at")
-    private LocalDateTime medianRentUpdatedAt;
-
     @Column(name = "crime_index", precision = 5, scale = 2)
     private BigDecimal crimeIndex;
-
-    @Column(name = "crime_updated_at")
-    private LocalDateTime crimeUpdatedAt;
 
     @Column(name = "walkability_score", precision = 4, scale = 1)
     private BigDecimal walkabilityScore;
 
+    @Column(name = "walkability_amenity_count")
+    private Integer walkabilityAmenityCount;
+
+    @Column(name = "parks_count")
+    private Integer parksCount;
+
+    @Column(name = "pct_houses")
+    private Integer pctHouses;
+
+    @Column(name = "pct_apartments")
+    private Integer pctApartments;
+
+    @Column(name = "pct_townhouses")
+    private Integer pctTownhouses;
+
+    @Column(name = "pct_units")
+    private Integer pctUnits;
+
+    @Column(name = "population")
     private Integer population;
 
     @Column(name = "median_age")
@@ -49,6 +62,12 @@ public class SuburbStats {
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    @Column(name = "median_rent_updated_at")
+    private LocalDateTime medianRentUpdatedAt;
+
+    @Column(name = "crime_updated_at")
+    private LocalDateTime crimeUpdatedAt;
 
     @PrePersist
     @PreUpdate

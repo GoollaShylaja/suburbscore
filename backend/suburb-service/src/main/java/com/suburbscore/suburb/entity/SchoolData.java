@@ -30,11 +30,14 @@ public class SchoolData {
     @Column(name = "num_high_schools")
     private Integer numHighSchools;
 
-    @Column(name = "avg_naplan_score", precision = 5, scale = 1)
-    private BigDecimal avgNaplanScore;
+    @Column(name = "avg_icsea_score", precision = 6, scale = 2)
+    private BigDecimal avgIcseaScore;
 
-    @Column(name = "best_school_name", length = 150)
+    @Column(name = "best_school_name", length = 255)
     private String bestSchoolName;
+
+    @Column(name = "data_available")
+    private Boolean dataAvailable = false;
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
