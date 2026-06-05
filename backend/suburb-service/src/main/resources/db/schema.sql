@@ -3,37 +3,49 @@
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
+-- Lookup table for Sydney regions + Other NSW.
+-- is_greater_sydney = false only for OTHER_NSW — used to exclude regional suburbs from scoring.
+CREATE TABLE IF NOT EXISTS regions (
+    id                UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    code              VARCHAR(50)  NOT NULL,
+    region_name       VARCHAR(100) NOT NULL,
+    is_greater_sydney BOOLEAN      NOT NULL DEFAULT false,
+    created_at        TIMESTAMP    NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMP    NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_region_code UNIQUE (code)
+);
+
 CREATE TABLE IF NOT EXISTS cities (
     id         UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-    name       VARCHAR(100) NOT NULL,
+    city_name       VARCHAR(100) NOT NULL,
     state      VARCHAR(10)  NOT NULL,
     country    VARCHAR(50)  NOT NULL DEFAULT 'Australia',
     created_at TIMESTAMP    NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP    NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_city_name_state UNIQUE (name, state)
+    CONSTRAINT uq_city_name_state UNIQUE (city_name, state)
 );
 
 CREATE TABLE IF NOT EXISTS suburbs (
     id          UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-    city_id     UUID         REFERENCES cities(id),
-    name        VARCHAR(100) NOT NULL,
+    fk_city_id  UUID         REFERENCES cities(id),
+    fk_region_id UUID        REFERENCES regions(id),
+    suburb_name VARCHAR(100) NOT NULL,
     postcode    VARCHAR(4)   NOT NULL,
     lga         VARCHAR(100),
     latitude    NUMERIC(9,6) NOT NULL,
     longitude   NUMERIC(9,6) NOT NULL,
-    region      VARCHAR(50),
     is_deleted  BOOLEAN      NOT NULL DEFAULT false,
     deleted_at  TIMESTAMP,
     created_at  TIMESTAMP    NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMP    NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_suburb_postcode_name UNIQUE (postcode, name)
+    CONSTRAINT uq_suburb_postcode_name UNIQUE (postcode, suburb_name)
 );
 
-CREATE INDEX IF NOT EXISTS idx_suburbs_postcode   ON suburbs(postcode);
-CREATE INDEX IF NOT EXISTS idx_suburbs_region     ON suburbs(region);
-CREATE INDEX IF NOT EXISTS idx_suburbs_name       ON suburbs(LOWER(name));
-CREATE INDEX IF NOT EXISTS idx_suburbs_city_id    ON suburbs(city_id);
-CREATE INDEX IF NOT EXISTS idx_suburbs_is_deleted ON suburbs(is_deleted);
+CREATE INDEX IF NOT EXISTS idx_suburbs_postcode    ON suburbs(postcode);
+CREATE INDEX IF NOT EXISTS idx_suburbs_region_id   ON suburbs(fk_region_id);
+CREATE INDEX IF NOT EXISTS idx_suburbs_name        ON suburbs(LOWER(suburb_name));
+CREATE INDEX IF NOT EXISTS idx_suburbs_city_id     ON suburbs(fk_city_id);
+CREATE INDEX IF NOT EXISTS idx_suburbs_is_deleted  ON suburbs(is_deleted);
 
 CREATE TABLE IF NOT EXISTS suburb_stats (
     id                        UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -76,6 +88,7 @@ CREATE TABLE IF NOT EXISTS transport_data (
     num_bus_routes          INTEGER,
     cbd_commute_mins_train  INTEGER,
     cbd_commute_mins_bus    INTEGER,
+    has_ferry_access        BOOLEAN      NOT NULL DEFAULT false,
     updated_at              TIMESTAMP    NOT NULL DEFAULT NOW(),
     CONSTRAINT uq_transport_suburb UNIQUE (suburb_id)
 );
@@ -85,7 +98,7 @@ CREATE TABLE IF NOT EXISTS school_data (
     suburb_id           UUID         NOT NULL REFERENCES suburbs(id) ON DELETE CASCADE,
     num_primary_schools INTEGER      DEFAULT 0,
     num_high_schools    INTEGER      DEFAULT 0,
-    avg_icsea_score     NUMERIC(6,2),
+    best_icsea_score    NUMERIC(6,2),
     best_school_name    VARCHAR(255),
     data_available      BOOLEAN      DEFAULT false,
     updated_at          TIMESTAMP    NOT NULL DEFAULT NOW(),

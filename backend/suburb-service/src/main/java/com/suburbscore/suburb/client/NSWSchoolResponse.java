@@ -10,5 +10,6 @@ public record NSWSchoolResponse(
         @JsonProperty("Town_suburb") String suburb,
         @JsonProperty("ICSEA_value") String icseaValue,
         @JsonProperty("Latitude") String latitude,
-        @JsonProperty("Longitude") String longitude
+        @JsonProperty("Longitude") String longitude,
+        @JsonProperty("ASGS_remoteness") String remoteness
 ) {}

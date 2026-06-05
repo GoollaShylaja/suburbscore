@@ -71,8 +71,8 @@ public class SecurityConfig {
                     objectMapper.writeValue(response.getWriter(), pd);
                 })
             )
-            .addFilterBefore(new RateLimitFilter(objectMapper), JwtAuthenticationFilter.class)
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(new RateLimitFilter(objectMapper), JwtAuthenticationFilter.class);
         return http.build();
     }
 

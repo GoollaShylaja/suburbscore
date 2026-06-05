@@ -24,7 +24,7 @@ public class SavedSuburb {
     private UUID userId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "suburb_id", nullable = false)
+    @JoinColumn(name = "fk_suburb_id", nullable = false)
     private Suburb suburb;
 
     @Column(name = "saved_at", nullable = false, updatable = false)

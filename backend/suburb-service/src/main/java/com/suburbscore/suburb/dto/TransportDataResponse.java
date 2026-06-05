@@ -11,13 +11,14 @@ import java.util.UUID;
 public record TransportDataResponse(
         @Schema(example = "3fa85f64-5717-4562-b3fc-2c963f66afa6") UUID suburbId,
         @Schema(example = "Newtown Station") String nearestTrainStation,
-        @Schema(example = "5", description = "Walking minutes to nearest station") Integer trainStationWalkMins,
-        @Schema(example = "8") Integer numBusRoutes,
-        @Schema(example = "18", description = "CBD commute by train in minutes") Integer cbdCommuteMinsTrain,
-        @Schema(example = "25") Integer cbdCommuteMinsBus,
+        @Schema(example = "5", description = "Walking minutes to nearest rail station") Integer trainStationWalkMins,
+        @Schema(example = "8", description = "Number of distinct bus routes serving the suburb") Integer numBusRoutes,
+        @Schema(example = "false", description = "Whether the suburb has a ferry wharf within 1.5km") Boolean hasFerryAccess,
+        @Schema(example = "18", description = "Fastest CBD commute by rail in minutes (Sydney Town Hall)") Integer cbdCommuteMinsTrain,
+        @Schema(example = "35", description = "Fastest CBD commute by bus in minutes") Integer cbdCommuteMinsBus,
         LocalDateTime updatedAt
 ) {
     public static TransportDataResponse empty(UUID suburbId) {
-        return new TransportDataResponse(suburbId, null, null, null, null, null, null);
+        return new TransportDataResponse(suburbId, null, null, null, null, null, null, null);
     }
 }

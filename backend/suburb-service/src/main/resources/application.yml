@@ -93,6 +93,67 @@ transport:
     base-url: https://api.transport.nsw.gov.au
     api-key: ${TRANSPORT_NSW_API_KEY:}
 
+  # Manually-verified peak-hour door-to-door commute times (walk + wait + transit).
+  # Applied on every startup to fix suburbs where the TfNSW Trip API consistently
+  # returns all-stations or off-peak service times instead of the peak express.
+  corrections:
+    # Western Line — T1 express is 63-65 min ride; API returned all-stations 107 mins
+    - suburb: Penrith
+      cbdCommuteMinsTrain: 75
+    # South Coast Line — T4 is 80-85 min; API returned 108 mins
+    - suburb: Wollongong
+      cbdCommuteMinsTrain: 92
+    # Blue Mountains Line — 107 min all-stations / 102 min limited-stops (timetable verified)
+    - suburb: Katoomba
+      cbdCommuteMinsTrain: 107
+    # Central West NSW TrainLink — ~195 min ride; API returned 254 mins
+    - suburb: Bathurst
+      cbdCommuteMinsTrain: 202
+    # Blue Mountains corridor — all consistently 30-50 mins over express times
+    - suburb: Wentworth Falls
+      cbdCommuteMinsTrain: 115
+    - suburb: Hazelbrook
+      cbdCommuteMinsTrain: 105
+    - suburb: Woodford
+      cbdCommuteMinsTrain: 110
+    # T1 Richmond Line — 75 min express; API returned 93-95 mins
+    - suburb: Richmond
+      cbdCommuteMinsTrain: 82
+    # Albury — NSW TrainLink XPT 2×/day (~7h45m), not a commuter service.
+    # Station name added so users know a station exists; commute stays NULL.
+    - suburb: Albury
+      nearestStation: Albury Station
+
+    # Trip API routed via bus/light rail from suburb centroid instead of nearby train.
+    # Station and walk time are correct; commute time is supplied manually.
+    # T4 Eastern Suburbs Railway: Edgecliff → Town Hall ~12 min
+    - suburb: Paddington
+      postcode: "2021"
+      cbdCommuteMinsTrain: 23
+    # T4: Bondi Junction → Town Hall ~19 min
+    - suburb: Woollahra
+      postcode: "2025"
+      cbdCommuteMinsTrain: 27
+    # T4: Kings Cross → Town Hall ~10 min
+    - suburb: Woolloomooloo
+      postcode: "2011"
+      cbdCommuteMinsTrain: 15
+    # T1 North Shore: Artarmon → Central ~22 min
+    - suburb: Willoughby
+      postcode: "2068"
+      cbdCommuteMinsTrain: 39
+    # T2 Airport/South: Macquarie Fields → Central ~40 min
+    - suburb: Macquarie Links
+      postcode: "2565"
+      cbdCommuteMinsTrain: 48
+
+    # Ferry false positives — geospatial match hit a river wharf, not a ferry service.
+    # Note: Glebe (F10 Blackwattle Bay) is intentionally excluded — service is real.
+    - suburb: Aldavilla
+      hasFerryAccess: false
+    - suburb: Millers Forest
+      hasFerryAccess: false
+
 osm:
   overpass:
     url: https://overpass-api.de/api/interpreter

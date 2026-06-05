@@ -63,6 +63,7 @@ class SuburbControllerTest {
     @Autowired ObjectMapper objectMapper;
     @MockitoBean SuburbService suburbService;
     @MockitoBean SchoolDataLoaderService schoolDataLoaderService;
+    @MockitoBean com.suburbscore.suburb.service.TransportDataLoaderService transportDataLoaderService;
 
     private static final UUID SUBURB_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID USER_ID   = UUID.fromString("00000000-0000-0000-0000-000000000002");
@@ -75,7 +76,7 @@ class SuburbControllerTest {
 
     private TransportDataResponse buildTransport() {
         return new TransportDataResponse(
-                SUBURB_ID, "Newtown Station", 5, 8, 18, 25,
+                SUBURB_ID, "Newtown Station", 5, 8, false, 18, 25,
                 LocalDateTime.of(2026, 1, 1, 0, 0));
     }
 
@@ -157,7 +158,7 @@ class SuburbControllerTest {
                     .andExpect(jsonPath("$.stats.medianRentWeekly").value(650))
                     .andExpect(jsonPath("$.stats.walkabilityAmenityCount").value(47))
                     .andExpect(jsonPath("$.transport.nearestTrainStation").value("Newtown Station"))
-                    .andExpect(jsonPath("$.schoolData.avgIcseaScore").value(1087.50))
+                    .andExpect(jsonPath("$.schoolData.bestIcseaScore").value(1087.50))
                     .andExpect(jsonPath("$.schoolData.dataAvailable").value(true));
         }
 
@@ -273,7 +274,7 @@ class SuburbControllerTest {
             mockMvc.perform(get("/api/suburbs/{id}/schools", SUBURB_ID))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.numPrimarySchools").value(2))
-                    .andExpect(jsonPath("$.avgIcseaScore").value(1087.50))
+                    .andExpect(jsonPath("$.bestIcseaScore").value(1087.50))
                     .andExpect(jsonPath("$.dataAvailable").value(true));
         }
 

@@ -1,7 +1,6 @@
 package com.suburbscore.suburb.scheduler;
 
 import com.suburbscore.suburb.client.OpenStreetMapApiClient;
-import com.suburbscore.suburb.client.TransportNSWApiClient;
 import com.suburbscore.suburb.entity.*;
 import com.suburbscore.suburb.enums.PropertyType;
 import com.suburbscore.suburb.kafka.SuburbDataUpdatedEvent;
@@ -10,6 +9,7 @@ import com.suburbscore.suburb.parser.BOCSARCsvParser;
 import com.suburbscore.suburb.parser.NSWRentExcelParser;
 import com.suburbscore.suburb.parser.PropertySalesCsvParser;
 import com.suburbscore.suburb.repository.*;
+import com.suburbscore.suburb.service.TransportDataLoaderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.CacheManager;
@@ -29,9 +29,8 @@ public class DataRefreshScheduler {
 
     private final SuburbRepository            suburbRepository;
     private final SuburbStatsRepository       suburbStatsRepository;
-    private final TransportDataRepository     transportDataRepository;
     private final SuburbRentByTypeRepository  rentByTypeRepository;
-    private final TransportNSWApiClient       transportNSWApiClient;
+    private final TransportDataLoaderService  transportDataLoaderService;
     private final OpenStreetMapApiClient      osmApiClient;
     private final BOCSARCsvParser             bocsarCsvParser;
     private final NSWRentExcelParser          nswRentExcelParser;
@@ -64,36 +63,9 @@ public class DataRefreshScheduler {
 
     // ── Transport NSW ─────────────────────────────────────────────────────────
 
-    @Transactional
     public void refreshTransportData(List<Suburb> suburbs) {
-        log.info("Refreshing transport data via Transport NSW API...");
-        int updated = 0;
-
-        for (Suburb suburb : suburbs) {
-            try {
-                TransportNSWApiClient.TransportResult result = transportNSWApiClient.fetchTransportData(
-                        suburb.getName(), suburb.getLatitude(), suburb.getLongitude());
-
-                if (result.nearestTrainStation() == null && result.numBusRoutes() == 0) continue;
-
-                TransportData transport = transportDataRepository.findBySuburbId(suburb.getId())
-                        .orElseGet(() -> {
-                            TransportData t = new TransportData();
-                            t.setSuburb(suburb);
-                            return t;
-                        });
-
-                if (result.nearestTrainStation() != null)
-                    transport.setNearestTrainStation(result.nearestTrainStation());
-                transport.setTrainStationWalkMins(result.trainStationWalkMins());
-                transport.setNumBusRoutes(result.numBusRoutes());
-                transportDataRepository.save(transport);
-                updated++;
-            } catch (Exception e) {
-                log.warn("Transport update failed for {}: {}", suburb.getName(), e.getMessage());
-            }
-        }
-        log.info("Transport data refreshed for {} suburbs", updated);
+        log.info("Delegating transport data refresh to TransportDataLoaderService...");
+        transportDataLoaderService.reloadAllAsync();
     }
 
     // ── OpenStreetMap ─────────────────────────────────────────────────────────
@@ -105,7 +77,7 @@ public class DataRefreshScheduler {
 
         for (Suburb suburb : suburbs) {
             try {
-                OpenStreetMapApiClient.OsmResult result = osmApiClient.fetchWalkabilityData(suburb.getName());
+                OpenStreetMapApiClient.OsmResult result = osmApiClient.fetchWalkabilityData(suburb.getSuburbName());
                 if (result.parksCount() == 0 && result.amenityCount() == 0) continue;
 
                 SuburbStats stats = suburbStatsRepository.findBySuburbId(suburb.getId())
@@ -120,7 +92,7 @@ public class DataRefreshScheduler {
                 suburbStatsRepository.save(stats);
                 updated++;
             } catch (Exception e) {
-                log.warn("OSM update failed for {}: {}", suburb.getName(), e.getMessage());
+                log.warn("OSM update failed for {}: {}", suburb.getSuburbName(), e.getMessage());
             }
         }
         log.info("Walkability data refreshed for {} suburbs", updated);
@@ -136,7 +108,7 @@ public class DataRefreshScheduler {
 
         int updated = 0;
         for (Suburb suburb : suburbs) {
-            BigDecimal crimeIndex = crimeMap.get(suburb.getName().toUpperCase());
+            BigDecimal crimeIndex = crimeMap.get(suburb.getSuburbName().toUpperCase());
             if (crimeIndex == null) continue;
 
             SuburbStats stats = suburbStatsRepository.findBySuburbId(suburb.getId())
@@ -163,7 +135,7 @@ public class DataRefreshScheduler {
         int updated = 0;
         for (NSWRentExcelParser.RentRecord record : rentRecords) {
             try {
-                List<Suburb> matches = suburbRepository.findByPostcodeOrderByNameAsc(record.postcode());
+                List<Suburb> matches = suburbRepository.findByPostcodeOrderBySuburbNameAsc(record.postcode());
                 for (Suburb suburb : matches) {
                     SuburbRentByType rent = rentByTypeRepository
                             .findBySuburbIdAndBedroomsAndPropertyType(
@@ -197,7 +169,7 @@ public class DataRefreshScheduler {
         int updated = 0;
         for (Suburb suburb : suburbs) {
             PropertySalesCsvParser.PropertyComposition comp =
-                    compositionMap.get(suburb.getName().toUpperCase());
+                    compositionMap.get(suburb.getSuburbName().toUpperCase());
             if (comp == null) continue;
 
             SuburbStats stats = suburbStatsRepository.findBySuburbId(suburb.getId())

@@ -9,7 +9,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "suburb_rent_by_type",
-       uniqueConstraints = @UniqueConstraint(columnNames = {"suburb_id", "bedrooms", "property_type"}))
+       uniqueConstraints = @UniqueConstraint(columnNames = {"fk_suburb_id", "bedrooms", "property_type"}))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -22,7 +22,7 @@ public class SuburbRentByType {
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "suburb_id", nullable = false)
+    @JoinColumn(name = "fk_suburb_id", nullable = false)
     private Suburb suburb;
 
     @Column(nullable = false)

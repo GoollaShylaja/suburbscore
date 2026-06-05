@@ -1,7 +1,10 @@
 package com.suburbscore.suburb.service;
 
+import com.suburbscore.suburb.entity.Region;
 import com.suburbscore.suburb.entity.Suburb;
+import com.suburbscore.suburb.repository.RegionRepository;
 import com.suburbscore.suburb.util.RegionClassifier;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVRecord;
@@ -18,7 +21,10 @@ import java.util.Map;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class SuburbCsvLoader {
+
+    private final RegionRepository regionRepository;
 
     @Value("${data.dir:./data}")
     private String dataDir;
@@ -59,11 +65,12 @@ public class SuburbCsvLoader {
                     if (seen.containsKey(key)) continue;
 
                     Suburb s = new Suburb();
-                    s.setName(name);
+                    s.setSuburbName(name);
                     s.setPostcode(rawPostcode);
                     s.setLatitude(new BigDecimal(lat));
                     s.setLongitude(new BigDecimal(lon));
-                    s.setRegion(RegionClassifier.classify(rawPostcode).name());
+                    String code = RegionClassifier.classify(name, rawPostcode).name();
+                    regionRepository.findByCode(code).ifPresent(s::setRegion);
                     seen.put(key, s);
                 } catch (Exception e) {
                     log.warn("Skipping malformed CSV row: {}", e.getMessage());

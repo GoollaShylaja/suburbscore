@@ -38,6 +38,7 @@ public class SuburbService {
     private final SchoolDataRepository schoolDataRepository;
     private final SuburbRentByTypeRepository rentByTypeRepository;
     private final SavedSuburbRepository savedSuburbRepository;
+    private final RegionRepository regionRepository;
     private final PostcodeApiClient postcodeApiClient;
 
     // ── List / Search ─────────────────────────────────────────────────────────
@@ -62,7 +63,7 @@ public class SuburbService {
 
     @Cacheable(value = "suburb:region", key = "#region")
     public List<SuburbSummaryResponse> getSuburbsByRegion(String region) {
-        List<Suburb> suburbs = suburbRepository.findByRegionIgnoreCase(region);
+        List<Suburb> suburbs = suburbRepository.findByRegion_CodeIgnoreCase(region);
         if (suburbs.isEmpty()) {
             log.warn("No suburbs found for region: {}", region);
         }
@@ -71,7 +72,7 @@ public class SuburbService {
 
     @Cacheable(value = "suburb:postcode", key = "#postcode")
     public List<SuburbDetailResponse> findByPostcode(String postcode) {
-        List<Suburb> results = suburbRepository.findByPostcodeOrderByNameAsc(postcode);
+        List<Suburb> results = suburbRepository.findByPostcodeOrderBySuburbNameAsc(postcode);
         if (results.isEmpty()) {
             throw new ResourceNotFoundException("Suburb", "postcode " + postcode);
         }
@@ -222,7 +223,7 @@ public class SuburbService {
 
         if (dto.numPrimarySchools() != null) schoolData.setNumPrimarySchools(dto.numPrimarySchools());
         if (dto.numHighSchools() != null)    schoolData.setNumHighSchools(dto.numHighSchools());
-        if (dto.avgIcseaScore() != null)     schoolData.setAvgIcseaScore(dto.avgIcseaScore());
+        if (dto.bestIcseaScore() != null)    schoolData.setBestIcseaScore(dto.bestIcseaScore());
         if (dto.bestSchoolName() != null)    schoolData.setBestSchoolName(dto.bestSchoolName());
         if (dto.dataAvailable() != null)     schoolData.setDataAvailable(dto.dataAvailable());
 
@@ -290,9 +291,10 @@ public class SuburbService {
     // ── Mappers ───────────────────────────────────────────────────────────────
 
     private SuburbSummaryResponse toSummary(Suburb s) {
+        String regionDisplay = s.getRegion() != null ? s.getRegion().getRegionName() : null;
         return new SuburbSummaryResponse(
-                s.getId(), s.getName(), s.getPostcode(),
-                s.getLga(), s.getRegion(), s.getLatitude(), s.getLongitude());
+                s.getId(), s.getSuburbName(), s.getPostcode(),
+                s.getLga(), regionDisplay, s.getLatitude(), s.getLongitude());
     }
 
     private SuburbDetailResponse toDetail(Suburb s) {
@@ -302,8 +304,9 @@ public class SuburbService {
         List<SuburbRentDTO> rent = rentByTypeRepository.findBySuburbId(s.getId()).stream()
                 .map(this::toRentDTO).toList();
 
+        String regionCode = s.getRegion() != null ? s.getRegion().getCode() : null;
         return new SuburbDetailResponse(
-                s.getId(), s.getName(), s.getPostcode(), s.getLga(), s.getRegion(),
+                s.getId(), s.getSuburbName(), s.getPostcode(), s.getLga(), regionCode,
                 s.getLatitude(), s.getLongitude(),
                 stats != null ? toStatsResponse(stats, s.getId()) : SuburbStatsResponse.empty(s.getId()),
                 transport != null ? toTransportResponse(transport, s.getId()) : TransportDataResponse.empty(s.getId()),
@@ -336,6 +339,7 @@ public class SuburbService {
                 t.getNearestTrainStation(),
                 t.getTrainStationWalkMins(),
                 t.getNumBusRoutes(),
+                t.isHasFerryAccess(),
                 t.getCbdCommuteMinsTrain(),
                 t.getCbdCommuteMinsBus(),
                 t.getUpdatedAt());
@@ -346,7 +350,7 @@ public class SuburbService {
                 suburbId,
                 s.getNumPrimarySchools(),
                 s.getNumHighSchools(),
-                s.getAvgIcseaScore(),
+                s.getBestIcseaScore(),
                 s.getBestSchoolName(),
                 s.getDataAvailable(),
                 s.getUpdatedAt());
@@ -375,16 +379,17 @@ public class SuburbService {
         int added = 0;
         for (PostcodeApiResponse r : apiResults) {
             String name = toTitleCase(r.name());
-            if (suburbRepository.existsByPostcodeAndNameIgnoreCase(postcodeStr, name)) {
+            if (suburbRepository.existsByPostcodeAndSuburbNameIgnoreCase(postcodeStr, name)) {
                 log.debug("Skipping existing suburb: {} {}", postcodeStr, name);
                 continue;
             }
             Suburb s = new Suburb();
-            s.setName(name);
+            s.setSuburbName(name);
             s.setPostcode(postcodeStr);
             s.setLatitude(BigDecimal.valueOf(r.latitude()));
             s.setLongitude(BigDecimal.valueOf(r.longitude()));
-            s.setRegion(RegionClassifier.classify(postcodeStr).name());
+            String code = RegionClassifier.classify(name, postcodeStr).name();
+            regionRepository.findByCode(code).ifPresent(s::setRegion);
             suburbRepository.save(s);
             added++;
         }

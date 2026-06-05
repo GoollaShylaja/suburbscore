@@ -3,7 +3,6 @@ package com.suburbscore.suburb.client;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.suburbscore.suburb.entity.Suburb;
-import com.suburbscore.suburb.util.RegionClassifier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -87,11 +86,11 @@ public class NSWSpatialApiClient {
             if (rawPostcode == null || rawPostcode.isBlank()) return null;
 
             Suburb s = new Suburb();
-            s.setName(toTitleCase(rawName.trim()));
+            s.setSuburbName(toTitleCase(rawName.trim()));
             s.setPostcode(rawPostcode.trim());
             s.setLatitude(BigDecimal.valueOf(feature.centroid().y()));
             s.setLongitude(BigDecimal.valueOf(feature.centroid().x()));
-            s.setRegion(RegionClassifier.classify(rawPostcode.trim()).name());
+            // region FK is assigned by DataInitializerService after regions are seeded
             return s;
         } catch (Exception e) {
             log.warn("Skipping invalid feature from NSW Spatial API: {}", e.getMessage());

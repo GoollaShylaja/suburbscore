@@ -13,22 +13,24 @@ import java.util.UUID;
 
 public interface SuburbRepository extends JpaRepository<Suburb, UUID> {
 
-    List<Suburb> findByPostcodeOrderByNameAsc(String postcode);
+    List<Suburb> findByPostcodeOrderBySuburbNameAsc(String postcode);
 
-    List<Suburb> findByRegionIgnoreCase(String region);
+    List<Suburb> findByRegion_CodeIgnoreCase(String regionCode);
 
-    Optional<Suburb> findByNameIgnoreCase(String name);
+    Optional<Suburb> findBySuburbNameIgnoreCase(String suburbName);
+
+    Optional<Suburb> findBySuburbNameIgnoreCaseAndPostcode(String suburbName, String postcode);
 
     Page<Suburb> findAll(Pageable pageable);
 
     boolean existsByPostcode(String postcode);
 
-    boolean existsByPostcodeAndNameIgnoreCase(String postcode, String name);
+    boolean existsByPostcodeAndSuburbNameIgnoreCase(String postcode, String suburbName);
 
     @Query("""
             SELECT s FROM Suburb s
-            WHERE LOWER(s.name) LIKE LOWER(CONCAT('%', :name, '%'))
-            ORDER BY s.name ASC
+            WHERE LOWER(s.suburbName) LIKE LOWER(CONCAT('%', :name, '%'))
+            ORDER BY s.suburbName ASC
             """)
     List<Suburb> searchByName(@Param("name") String name);
 }

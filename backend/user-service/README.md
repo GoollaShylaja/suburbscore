@@ -24,7 +24,7 @@ cp .env.example .env
 
 **3. Run the service**
 ```bash
-export $(cat .env | xargs) && mvn spring-boot:run
+export $(cat .env | xargs) && JAVA_HOME=$(/usr/libexec/java_home -v 21) mvn spring-boot:run
 ```
 
 Service starts on **http://localhost:8081**

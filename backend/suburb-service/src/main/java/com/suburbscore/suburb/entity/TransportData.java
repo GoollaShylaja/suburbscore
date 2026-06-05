@@ -20,7 +20,7 @@ public class TransportData {
     private UUID id;
 
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "suburb_id", nullable = false, unique = true)
+    @JoinColumn(name = "fk_suburb_id", nullable = false, unique = true)
     private Suburb suburb;
 
     @Column(name = "nearest_train_station", length = 100)
@@ -37,6 +37,9 @@ public class TransportData {
 
     @Column(name = "cbd_commute_mins_bus")
     private Integer cbdCommuteMinsBus;
+
+    @Column(name = "has_ferry_access", nullable = false)
+    private boolean hasFerryAccess = false;
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;

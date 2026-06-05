@@ -4,6 +4,7 @@ import com.suburbscore.suburb.dto.*;
 import com.suburbscore.suburb.enums.PropertyType;
 import com.suburbscore.suburb.service.SchoolDataLoaderService;
 import com.suburbscore.suburb.service.SuburbService;
+import com.suburbscore.suburb.service.TransportDataLoaderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -36,6 +37,7 @@ public class SuburbController {
 
     private final SuburbService suburbService;
     private final SchoolDataLoaderService schoolDataLoaderService;
+    private final TransportDataLoaderService transportDataLoaderService;
 
     // ── GET /api/suburbs ──────────────────────────────────────────────────────
 
@@ -79,7 +81,7 @@ public class SuburbController {
     // ── GET /api/suburbs/region/{region} ──────────────────────────────────────
 
     @Operation(summary = "Get suburbs by region",
-               description = "Returns all suburbs in a Sydney region (e.g. INNER_WEST, NORTH_SHORE).")
+               description = "Returns all suburbs in a region (e.g. INNER_WEST, NORTH_SHORE_RYDE, THE_HILLS_DISTRICT, MACARTHUR, CENTRAL_COAST).")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Suburbs returned",
             content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE))
@@ -324,6 +326,21 @@ public class SuburbController {
     }
 
     // ── Admin ─────────────────────────────────────────────────────────────────
+
+    @Operation(summary = "Trigger transport data reload from Transport NSW API",
+               description = "Runs asynchronously. Returns immediately. Requires TRANSPORT_NSW_API_KEY to be set.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Transport data loading started"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized",
+            content = @Content(mediaType = "application/problem+json"))
+    })
+    @PostMapping("/admin/load-transport")
+    public ResponseEntity<String> triggerTransportLoad() {
+        transportDataLoaderService.reloadAllAsync();
+        log.info("Admin triggered transport data reload");
+        return ResponseEntity.ok("Transport data loading started");
+    }
 
     @Operation(summary = "Trigger school data reload from NSW API",
                description = "Runs asynchronously. Returns immediately.")

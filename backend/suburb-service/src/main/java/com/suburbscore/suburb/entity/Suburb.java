@@ -14,7 +14,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "suburbs",
-       uniqueConstraints = @UniqueConstraint(columnNames = {"postcode", "name"}))
+       uniqueConstraints = @UniqueConstraint(columnNames = {"postcode", "suburb_name"}))
 @SQLRestriction("is_deleted = false")
 @Getter
 @Setter
@@ -25,14 +25,14 @@ public class Suburb {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(nullable = false, length = 100)
-    private String name;
+    @Column(nullable = false, length = 100,name="suburb_name")
+    private String suburbName;
 
     @Column(nullable = false, length = 4)
     private String postcode;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "city_id")
+    @JoinColumn(name = "fk_city_id")
     private City city;
 
     @Column(length = 100)
@@ -44,8 +44,9 @@ public class Suburb {
     @Column(nullable = false, precision = 9, scale = 6)
     private BigDecimal longitude;
 
-    @Column(length = 50)
-    private String region;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "fk_region_id")
+    private Region region;
 
     @Column(name = "is_deleted", nullable = false)
     private boolean isDeleted = false;

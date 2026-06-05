@@ -21,7 +21,7 @@ public class SchoolData {
     private UUID id;
 
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "suburb_id", nullable = false, unique = true)
+    @JoinColumn(name = "fk_suburb_id", nullable = false, unique = true)
     private Suburb suburb;
 
     @Column(name = "num_primary_schools")
@@ -30,8 +30,8 @@ public class SchoolData {
     @Column(name = "num_high_schools")
     private Integer numHighSchools;
 
-    @Column(name = "avg_icsea_score", precision = 6, scale = 2)
-    private BigDecimal avgIcseaScore;
+    @Column(name = "best_icsea_score", precision = 6, scale = 2)
+    private BigDecimal bestIcseaScore;
 
     @Column(name = "best_school_name", length = 255)
     private String bestSchoolName;

@@ -1,2 +1,5 @@
 docker-compose up postgres redis zookeeper kafka -d
 docker-compose up eureka-server -d
+docker compose down -v
+docker compose up -d postgres
+

@@ -9,25 +9,25 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "cities",
-       uniqueConstraints = @UniqueConstraint(columnNames = {"city_name", "state"}))
+@Table(name = "regions",
+       uniqueConstraints = @UniqueConstraint(columnNames = "code"))
 @Getter
 @Setter
 @NoArgsConstructor
-public class City {
+public class Region {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(nullable = false, length = 100,name="city_name")
-    private String cityName;
-
-    @Column(nullable = false, length = 10)
-    private String state;
-
     @Column(nullable = false, length = 50)
-    private String country = "Australia";
+    private String code;
+
+    @Column(name = "region_name", nullable = false, length = 100)
+    private String regionName;
+
+    @Column(name = "is_greater_sydney", nullable = false)
+    private boolean isGreaterSydney;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

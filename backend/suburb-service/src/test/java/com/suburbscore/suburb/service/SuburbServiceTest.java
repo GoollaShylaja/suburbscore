@@ -37,6 +37,7 @@ class SuburbServiceTest {
     @Mock SchoolDataRepository schoolDataRepository;
     @Mock SuburbRentByTypeRepository rentByTypeRepository;
     @Mock SavedSuburbRepository savedSuburbRepository;
+    @Mock RegionRepository regionRepository;
 
     @InjectMocks SuburbService suburbService;
 
@@ -45,10 +46,14 @@ class SuburbServiceTest {
     private Suburb buildSuburb() {
         Suburb s = new Suburb();
         s.setId(SUBURB_ID);
-        s.setName("Newtown");
+        s.setSuburbName("Newtown");
         s.setPostcode("2042");
         s.setLga("Inner West Council");
-        s.setRegion("INNER_WEST");
+        Region r = new Region();
+        r.setCode("INNER_WEST");
+        r.setRegionName("Inner West");
+        r.setGreaterSydney(true);
+        s.setRegion(r);
         s.setLatitude(new BigDecimal("-33.897900"));
         s.setLongitude(new BigDecimal("151.179200"));
         s.setCreatedAt(LocalDateTime.of(2026, 1, 1, 0, 0));
@@ -95,7 +100,7 @@ class SuburbServiceTest {
         sc.setSuburb(suburb);
         sc.setNumPrimarySchools(2);
         sc.setNumHighSchools(1);
-        sc.setAvgIcseaScore(new BigDecimal("1087.50"));
+        sc.setBestIcseaScore(new BigDecimal("1087.50"));
         sc.setBestSchoolName("Newtown High School of the Performing Arts");
         sc.setDataAvailable(true);
         sc.setUpdatedAt(LocalDateTime.now());
@@ -153,7 +158,7 @@ class SuburbServiceTest {
             assertThat(result.id()).isEqualTo(SUBURB_ID);
             assertThat(result.stats().medianRentWeekly()).isEqualTo(650);
             assertThat(result.transport().nearestTrainStation()).isEqualTo("Newtown Station");
-            assertThat(result.schoolData().avgIcseaScore()).isEqualByComparingTo("1087.50");
+            assertThat(result.schoolData().bestIcseaScore()).isEqualByComparingTo("1087.50");
             assertThat(result.schoolData().dataAvailable()).isTrue();
         }
 
@@ -195,7 +200,7 @@ class SuburbServiceTest {
         @DisplayName("returns suburbs for valid postcode")
         void found_returnsList() {
             Suburb suburb = buildSuburb();
-            when(suburbRepository.findByPostcodeOrderByNameAsc("2042")).thenReturn(List.of(suburb));
+            when(suburbRepository.findByPostcodeOrderBySuburbNameAsc("2042")).thenReturn(List.of(suburb));
             when(suburbStatsRepository.findBySuburbId(SUBURB_ID)).thenReturn(Optional.of(buildStats(suburb)));
             when(transportDataRepository.findBySuburbId(SUBURB_ID)).thenReturn(Optional.empty());
             when(schoolDataRepository.findBySuburbId(SUBURB_ID)).thenReturn(Optional.empty());
@@ -210,7 +215,7 @@ class SuburbServiceTest {
         @Test
         @DisplayName("throws ResourceNotFoundException when no suburbs match postcode")
         void notFound_throwsException() {
-            when(suburbRepository.findByPostcodeOrderByNameAsc("9999")).thenReturn(List.of());
+            when(suburbRepository.findByPostcodeOrderBySuburbNameAsc("9999")).thenReturn(List.of());
 
             assertThatThrownBy(() -> suburbService.findByPostcode("9999"))
                     .isInstanceOf(ResourceNotFoundException.class)
@@ -278,7 +283,7 @@ class SuburbServiceTest {
 
             assertThat(result.dataAvailable()).isTrue();
             assertThat(result.numPrimarySchools()).isEqualTo(2);
-            assertThat(result.avgIcseaScore()).isEqualByComparingTo("1087.50");
+            assertThat(result.bestIcseaScore()).isEqualByComparingTo("1087.50");
         }
 
         @Test

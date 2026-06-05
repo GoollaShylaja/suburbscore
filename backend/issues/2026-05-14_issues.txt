@@ -1,0 +1,252 @@
+═══════════════════════════════════════════════════════
+ISSUES & SOLUTIONS — suburb-service
+DATE: 2026-05-14
+═══════════════════════════════════════════════════════
+
+─────────────────────────────────────────────────────
+ISSUE 1: PostgreSQL init script failing on startup
+─────────────────────────────────────────────────────
+Error:
+  FATAL: database "admin" does not exist
+  (from docker-entrypoint-initdb.d/init-db.sh)
+
+Cause:
+  psql was called without --dbname, so it defaulted to
+  connecting to a database named after the user (admin).
+  Only the "suburbscore" database existed at that point.
+
+Fix:
+  Added --dbname "postgres" to the psql command in
+  docker/postgres/init-db.sh so it connects to the
+  built-in postgres database which always exists.
+
+─────────────────────────────────────────────────────
+ISSUE 2: PostgreSQL healthcheck failing every 10s
+─────────────────────────────────────────────────────
+Error:
+  FATAL: database "admin" does not exist
+  (repeated every 10 seconds)
+
+Cause:
+  The healthcheck used pg_isready -U ${POSTGRES_USER}.
+  pg_isready defaults to a database named after the user
+  (admin), which does not exist.
+
+Fix:
+  Added -d postgres to the healthcheck command in
+  docker-compose.yml:
+  pg_isready -U ${POSTGRES_USER} -d postgres
+
+─────────────────────────────────────────────────────
+ISSUE 3: Eureka connection refused on startup
+─────────────────────────────────────────────────────
+Error:
+  Connection refused to http://localhost:8761/eureka/
+
+Cause:
+  When running the service locally (outside Docker),
+  Eureka is not running at localhost:8761. The service
+  kept retrying and logging errors.
+
+Fix:
+  Set eureka.client.enabled: false in the default
+  (local) profile in application.yml.
+  Set eureka.client.enabled: true only in the docker
+  profile so Eureka registration works in Docker only.
+
+─────────────────────────────────────────────────────
+ISSUE 4: PostcodeApiClient deserialization error
+─────────────────────────────────────────────────────
+Error:
+  Error while extracting response for type
+  List<PostcodeApiResponse> and content type
+  application/json
+
+Cause:
+  Two mismatches between the DTO and actual API response:
+  1. "state" field in the API response is a nested object
+     {"name": "New South Wales", "abbreviation": "NSW"}
+     but the DTO mapped it as a plain String.
+  2. "postcode" is a JSON integer (2000) but the DTO
+     declared it as String.
+
+Fix:
+  Added an inner record State(name, abbreviation) inside
+  PostcodeApiResponse and changed postcode to int.
+  Updated the filter in PostcodeApiClient to use
+  r.state().abbreviation() and r.postcode() directly.
+
+─────────────────────────────────────────────────────
+ISSUE 5: PostcodeApiClient returning only 100 suburbs
+─────────────────────────────────────────────────────
+Error:
+  Postcode API returned 100 NSW suburbs in range 2000-2234
+
+Cause:
+  The API endpoint /suburbs.json?state=NSW has a hard
+  cap of 100 results per request. No pagination
+  parameters (page, limit) are supported — they silently
+  return the same 100 records.
+
+Fix:
+  Dropped the external API for seeding entirely.
+  Downloaded a free static CSV from:
+  github.com/matthewproctor/australianpostcodes
+  Created SuburbCsvLoader to read data/suburbs.csv at
+  startup — returns 668 unique Sydney suburbs instantly
+  with no external dependency.
+  PostcodeApiClient kept for on-demand per-postcode
+  lookups via POST /api/suburbs/admin/import/{postcode}.
+
+─────────────────────────────────────────────────────
+ISSUE 6: Duplicate key on suburbs insert
+─────────────────────────────────────────────────────
+Error:
+  PSQLException: duplicate key value violates unique
+  constraint "ukrrjjbmkggrc9oahnxrbewp0qr"
+
+Cause:
+  The CSV file contains duplicate rows with the same
+  postcode + locality combination. The suburbs table has
+  a unique constraint on (postcode, name).
+
+Fix:
+  Added in-memory deduplication in SuburbCsvLoader using
+  a LinkedHashMap keyed on "postcode|name". First
+  occurrence wins, duplicates are silently skipped.
+
+─────────────────────────────────────────────────────
+ISSUE 7: School data loading 0 suburbs
+─────────────────────────────────────────────────────
+Error:
+  School data load complete — processed 0 suburbs
+
+Cause:
+  Transaction timing issue. DataInitializerService
+  .loadOnStartup() was @Transactional and called
+  loadForAllSuburbsAsync() before the transaction
+  committed. The async thread ran in a separate thread,
+  called findAll(), and saw 0 rows because the parent
+  transaction was still open and not yet visible to
+  other connections.
+
+Fix:
+  Removed @Transactional from loadOnStartup() and
+  extracted saveAll() into a separate persistSuburbs()
+  method annotated with @Transactional. This ensures
+  the transaction commits fully before
+  loadForAllSuburbsAsync() is called, so the async
+  thread sees all 668 rows.
+
+─────────────────────────────────────────────────────
+ISSUE 8: School data all NULL — NSW Schools API not returning results
+─────────────────────────────────────────────────────
+Error:
+  All school_data rows have NULL avg_icsea_score,
+  NULL best_school_name, data_available=False,
+  num_high_schools=0, num_primary_schools=0
+
+Cause:
+  Three mismatches between code and actual API response:
+  1. NSWSchoolsApiClient used filter {"suburb":"NEWTOWN"}
+     but the actual API field name is "Town_suburb".
+     Every query returned 0 results silently.
+  2. NSWSchoolResponse had wrong @JsonAlias casing:
+     "school_name" instead of "School_name",
+     "icsea_value" instead of "ICSEA_value",
+     "school_type" instead of "Level_of_schooling".
+     Jackson is case-sensitive so all fields deserialised
+     as null.
+  3. SchoolDataLoaderService filtered by "Primary" and
+     "Secondary" but the API returns "Primary School",
+     "Infants School", and "Secondary School".
+
+Fix:
+  1. Changed filter key to "Town_suburb" and removed
+     toUpperCase() — API expects title-case suburb names.
+  2. Fixed all @JsonAlias values in NSWSchoolResponse
+     to match the exact API field names.
+  3. Updated school type filters to use contains()
+     so "Primary School" and "Infants School" both count
+     as primary, "Secondary School" counts as secondary.
+
+─────────────────────────────────────────────────────
+ISSUE 9: School data still null after API field fixes
+─────────────────────────────────────────────────────
+Error:
+  All school_data rows still NULL after fixing field
+  names and filter key.
+
+Cause:
+  UriComponentsBuilder treats { and } characters in
+  query parameter values as URI template variables.
+  The filters JSON {"Town_suburb":"Newtown"} was passed
+  unencoded, producing a malformed URL that the NSW API
+  rejected with success: false — silently returning
+  empty results.
+
+Fix:
+  Replaced UriComponentsBuilder with manual URL
+  construction using URLEncoder.encode() to properly
+  percent-encode the filters JSON before appending
+  it to the URL string.
+
+─────────────────────────────────────────────────────
+ISSUE 10: School data still null — ICSEA_value type mismatch
+─────────────────────────────────────────────────────
+Error:
+  All school_data rows still NULL after URL encoding fix.
+  No visible error in logs.
+
+Cause:
+  Three problems combined to silently fail every suburb:
+  1. The NSW API returns ICSEA_value as a JSON String
+     (e.g. "1143") but NSWSchoolResponse declared it as
+     Double. Jackson threw MismatchedInputException on
+     every single suburb deserialization.
+  2. The exception was caught at log.debug level in
+     NSWSchoolsApiClient — completely invisible in logs
+     since the app runs at INFO level.
+  3. @JsonAlias on Java record components is less
+     reliable than @JsonProperty for constructor-based
+     deserialization that Jackson uses for records.
+
+Fix:
+  1. Changed icseaValue type from Double to String in
+     NSWSchoolResponse to match the actual API response.
+  2. Added parseIcsea(String) helper in
+     SchoolDataLoaderService to safely parse the String
+     to Double where needed, returning null on blank or
+     invalid values.
+  3. Replaced @JsonAlias with @JsonProperty on all
+     NSWSchoolResponse fields for reliable mapping.
+  4. Raised log level from debug to warn in
+     NSWSchoolsApiClient and to error in
+     SchoolDataLoaderService so failures are never
+     silently swallowed again.
+
+─────────────────────────────────────────────────────
+ISSUE 11: 409 CONFLICT — Cannot parse JSON filters
+─────────────────────────────────────────────────────
+Error:
+  409 CONFLICT on GET — {"error": {"filters":
+  ["Cannot parse JSON"]}, "success": false}
+
+Cause:
+  RestTemplate double-encodes a String URL. The filters
+  value was manually encoded with URLEncoder.encode()
+  producing %7B%22Town_suburb%22%3A%22Menai%22%7D.
+  When passed as a String to restTemplate.getForObject(),
+  RestTemplate re-encoded it — %7B became %257B — so
+  the server decoded the value as the literal string
+  %7B%22...%22%7D instead of JSON, failing to parse it.
+
+Fix:
+  Changed the URL String to a URI object using
+  URI.create(). RestTemplate never re-encodes a URI
+  object, so the pre-encoded filters value reaches
+  the server correctly.
+
+The Maintainer-Friendly v2 (Data-Driven Configuration)To implement your structural observation, we can map ranges cleanly into an order-independent structure using a java.util.TreeMap.By matching ranges using a floorEntry() binary search lookup on a custom interval class, we eliminate ordering bugs entirely. A future maintainer can safely append ranges to the static block out of order without shadowing any existing rules.javaimport java.util.TreeMap;
+
+Use code with caution.Why the v2 Architecture is PreferableO(log N) Performance: The binary search approach via floorEntry() evaluates boundaries exceptionally fast, scales smoothly, and handles high throughput traffic without bottlenecking.Order Independence: If a team member appends a rule to the bottom of the static block that belongs numerically at the top, the compiler natively indexes it cleanly without causing logical shadowing issues.Auditability: The clean alignment of blocks makes checking against official Australian Bureau of Statistics (ABS) boundaries trivial during future system refactors.

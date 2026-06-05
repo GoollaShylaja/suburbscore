@@ -67,6 +67,7 @@ as part of the SuburbScore platform (Sydney suburb intelligence app).
 - @SecurityRequirement on protected endpoints
 
 ### Database
+- Every new microservice should follow the pattern: suburbscore_<domain>.
 - UUID primary keys (@GeneratedValue(strategy = GenerationType.UUID))
 - @PrePersist sets createdAt + updatedAt
 - @PreUpdate sets updatedAt

@@ -13,7 +13,7 @@ public record SchoolDataResponse(
         @Schema(example = "3fa85f64-5717-4562-b3fc-2c963f66afa6") UUID suburbId,
         @Schema(example = "3") Integer numPrimarySchools,
         @Schema(example = "1") Integer numHighSchools,
-        @Schema(example = "1087.50", description = "Average ICSEA score across schools in the suburb") BigDecimal avgIcseaScore,
+        @Schema(example = "1087.50", description = "Highest ICSEA score among schools serving this suburb") BigDecimal bestIcseaScore,
         @Schema(example = "Newtown High School of the Performing Arts") String bestSchoolName,
         @Schema(example = "true") Boolean dataAvailable,
         LocalDateTime updatedAt
