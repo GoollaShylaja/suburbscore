@@ -1,15 +1,15 @@
 package com.suburbscore.suburb.scheduler;
 
-import com.suburbscore.suburb.client.OpenStreetMapApiClient;
 import com.suburbscore.suburb.entity.*;
 import com.suburbscore.suburb.enums.PropertyType;
 import com.suburbscore.suburb.kafka.SuburbDataUpdatedEvent;
 import com.suburbscore.suburb.kafka.SuburbKafkaProducer;
-import com.suburbscore.suburb.parser.BOCSARCsvParser;
 import com.suburbscore.suburb.parser.NSWRentExcelParser;
 import com.suburbscore.suburb.parser.PropertySalesCsvParser;
 import com.suburbscore.suburb.repository.*;
+import com.suburbscore.suburb.service.CrimeDataLoaderService;
 import com.suburbscore.suburb.service.TransportDataLoaderService;
+import com.suburbscore.suburb.service.WalkabilityDataLoaderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.CacheManager;
@@ -17,7 +17,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -27,12 +26,12 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class DataRefreshScheduler {
 
-    private final SuburbRepository            suburbRepository;
-    private final SuburbStatsRepository       suburbStatsRepository;
-    private final SuburbRentByTypeRepository  rentByTypeRepository;
-    private final TransportDataLoaderService  transportDataLoaderService;
-    private final OpenStreetMapApiClient      osmApiClient;
-    private final BOCSARCsvParser             bocsarCsvParser;
+    private final SuburbRepository              suburbRepository;
+    private final SuburbStatsRepository         suburbStatsRepository;
+    private final SuburbRentByTypeRepository    rentByTypeRepository;
+    private final TransportDataLoaderService    transportDataLoaderService;
+    private final WalkabilityDataLoaderService  walkabilityDataLoaderService;
+    private final CrimeDataLoaderService        crimeDataLoaderService;
     private final NSWRentExcelParser          nswRentExcelParser;
     private final PropertySalesCsvParser      propertySalesCsvParser;
     private final CacheManager                cacheManager;
@@ -70,58 +69,16 @@ public class DataRefreshScheduler {
 
     // ── OpenStreetMap ─────────────────────────────────────────────────────────
 
-    @Transactional
     public void refreshWalkabilityData(List<Suburb> suburbs) {
-        log.info("Refreshing walkability data via OpenStreetMap...");
-        int updated = 0;
-
-        for (Suburb suburb : suburbs) {
-            try {
-                OpenStreetMapApiClient.OsmResult result = osmApiClient.fetchWalkabilityData(suburb.getSuburbName());
-                if (result.parksCount() == 0 && result.amenityCount() == 0) continue;
-
-                SuburbStats stats = suburbStatsRepository.findBySuburbId(suburb.getId())
-                        .orElseGet(() -> {
-                            SuburbStats s = new SuburbStats();
-                            s.setSuburb(suburb);
-                            return s;
-                        });
-
-                stats.setParksCount(result.parksCount());
-                stats.setWalkabilityAmenityCount(result.amenityCount());
-                suburbStatsRepository.save(stats);
-                updated++;
-            } catch (Exception e) {
-                log.warn("OSM update failed for {}: {}", suburb.getSuburbName(), e.getMessage());
-            }
-        }
-        log.info("Walkability data refreshed for {} suburbs", updated);
+        log.info("Delegating walkability data refresh to WalkabilityDataLoaderService...");
+        walkabilityDataLoaderService.reloadAllAsync();
     }
 
     // ── BOCSAR Crime ──────────────────────────────────────────────────────────
 
-    @Transactional
     public void refreshCrimeData(List<Suburb> suburbs) {
-        log.info("Refreshing crime data from BOCSAR CSV...");
-        Map<String, BigDecimal> crimeMap = bocsarCsvParser.parse();
-        if (crimeMap.isEmpty()) return;
-
-        int updated = 0;
-        for (Suburb suburb : suburbs) {
-            BigDecimal crimeIndex = crimeMap.get(suburb.getSuburbName().toUpperCase());
-            if (crimeIndex == null) continue;
-
-            SuburbStats stats = suburbStatsRepository.findBySuburbId(suburb.getId())
-                    .orElseGet(() -> {
-                        SuburbStats s = new SuburbStats();
-                        s.setSuburb(suburb);
-                        return s;
-                    });
-            stats.setCrimeIndex(crimeIndex);
-            suburbStatsRepository.save(stats);
-            updated++;
-        }
-        log.info("Crime index updated for {} suburbs", updated);
+        log.info("Refreshing crime data from BOCSAR CSV (last 2 years)...");
+        crimeDataLoaderService.loadCrimeData();
     }
 
     // ── NSW Rent ──────────────────────────────────────────────────────────────

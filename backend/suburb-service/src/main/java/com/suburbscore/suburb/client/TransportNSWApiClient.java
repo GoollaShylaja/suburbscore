@@ -6,13 +6,11 @@ import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.reactive.function.client.WebClient;
 
 import java.math.BigDecimal;
+import java.net.URI;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -26,10 +24,10 @@ import java.util.stream.Collectors;
 @Component
 public class TransportNSWApiClient {
 
-    private final RestTemplate restTemplate;
+    private final WebClient webClient;
 
-    public TransportNSWApiClient(@Qualifier("externalRestTemplate") RestTemplate restTemplate) {
-        this.restTemplate = restTemplate;
+    public TransportNSWApiClient(@Qualifier("externalWebClient") WebClient webClient) {
+        this.webClient = webClient;
     }
 
     @Value("${transport.nsw.api-key:}")
@@ -61,9 +59,6 @@ public class TransportNSWApiClient {
 
             List<Platform> platforms = findPlatformsByCoord(lat, lon);
 
-            // Nearest train station — prefer a station whose name contains the suburb name
-            // (e.g. "Strathfield Station" over "Homebush Station" for the suburb Strathfield)
-            // to avoid assigning a neighbouring suburb's station when centroids are close.
             String suburbKey = suburbName.toLowerCase().replaceAll("[^a-z]", "");
             List<Platform> trainPlatforms = platforms.stream()
                     .filter(p -> isTrainPlatform(p.disassembledName()))
@@ -83,12 +78,9 @@ public class TransportNSWApiClient {
             Integer walkMins = nearestTrainPlatform != null
                     ? distanceToWalkMins(nearestTrainPlatform.properties()) : null;
 
-            // Ferry access — any platform with "Wharf" in name
             boolean hasFerry = platforms.stream()
                     .anyMatch(p -> p.disassembledName() != null && p.disassembledName().contains("Wharf"));
 
-            // Bus routes — try up to 3 nearest bus stops and use first non-zero result.
-            // A single stop can return 0 if its departures are sparse at query time.
             int busRoutes = 0;
             List<Platform> busStops = platforms.stream()
                     .filter(p -> !isTrainPlatform(p.disassembledName())
@@ -101,10 +93,6 @@ public class TransportNSWApiClient {
                 if (busRoutes > 0) break;
             }
 
-            // CBD commute via trip planner.
-            // Guard 1 — only record train commute when a station was detected nearby.
-            // Guard 2 — cap at 300 mins: anything longer is a weekly regional/outback service
-            //           (Euabalong West, Griffith, Coolamon etc.) not a meaningful daily commute.
             CbdCommute commute = fetchCbdCommute(lat, lon);
             Integer cbdTrain = (nearestStation != null
                     && commute.trainMins() != null
@@ -124,11 +112,9 @@ public class TransportNSWApiClient {
     }
 
     // ── /coord — finds all transport platforms near a coordinate ─────────────
-    // Uses BUS_POINT type which returns train, bus, and ferry platforms
+    // Raw URL avoids UriComponentsBuilder encoding colons in the coord parameter
 
     private List<Platform> findPlatformsByCoord(double lat, double lon) {
-        // Transport NSW coord param: LONGITUDE:LATITUDE:EPSG:4326 (longitude first)
-        // Raw URL — UriComponentsBuilder encodes colons in coord param, breaking the API
         String rawUrl = baseUrl + "/v1/tp/coord"
                 + "?outputFormat=rapidJSON"
                 + "&coord=" + lon + ":" + lat + ":EPSG:4326"
@@ -139,9 +125,12 @@ public class TransportNSWApiClient {
 
         log.debug("coord URL: {}", rawUrl);
 
-        CoordResponse response = restTemplate.exchange(
-                rawUrl, HttpMethod.GET, new HttpEntity<>(authHeaders()), CoordResponse.class
-        ).getBody();
+        CoordResponse response = webClient.get()
+                .uri(URI.create(rawUrl))
+                .header("Authorization", "apikey " + apiKey)
+                .retrieve()
+                .bodyToMono(CoordResponse.class)
+                .block();
 
         if (response == null || response.locations() == null) {
             log.debug("coord returned no platforms for {},{}", lat, lon);
@@ -169,9 +158,12 @@ public class TransportNSWApiClient {
                 + "&maxStopEvents=50";
 
         try {
-            DmResponse response = restTemplate.exchange(
-                    rawUrl, HttpMethod.GET, new HttpEntity<>(authHeaders()), DmResponse.class
-            ).getBody();
+            DmResponse response = webClient.get()
+                    .uri(URI.create(rawUrl))
+                    .header("Authorization", "apikey " + apiKey)
+                    .retrieve()
+                    .bodyToMono(DmResponse.class)
+                    .block();
 
             if (response == null || response.stopEvents() == null) return 0;
 
@@ -197,8 +189,6 @@ public class TransportNSWApiClient {
     private static final double CBD_LAT = -33.8731;
 
     private CbdCommute fetchCbdCommute(double originLat, double originLon) {
-        // Always query a Sydney-timezone weekday so the API returns weekday timetables
-        // regardless of when or where the data loader runs (e.g. midnight UTC in Docker).
         String refDate = nextSydneyWeekday().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
 
         String originCoord = originLon + ":" + originLat + ":EPSG:4326";
@@ -216,9 +206,12 @@ public class TransportNSWApiClient {
                 + "&calcNumberOfTrips=15";
 
         try {
-            TripResponse response = restTemplate.exchange(
-                    rawUrl, HttpMethod.GET, new HttpEntity<>(authHeaders()), TripResponse.class
-            ).getBody();
+            TripResponse response = webClient.get()
+                    .uri(URI.create(rawUrl))
+                    .header("Authorization", "apikey " + apiKey)
+                    .retrieve()
+                    .bodyToMono(TripResponse.class)
+                    .block();
 
             if (response == null || response.journeys() == null || response.journeys().isEmpty()) {
                 return CbdCommute.empty();
@@ -246,21 +239,18 @@ public class TransportNSWApiClient {
         }
     }
 
-    private static final int CLASS_TRAIN           = 1;
-    private static final int CLASS_METRO           = 2;
-    private static final int CLASS_LIGHT_RAIL      = 4;
-    private static final int CLASS_BUS             = 5;
-    private static final int CLASS_COACH           = 7; // NSW TrainLink intercity/regional
-    private static final int CLASS_WALKING         = 99; // 99=Walking, 100=Walking(Footpath) per API spec
+    private static final int CLASS_TRAIN      = 1;
+    private static final int CLASS_METRO      = 2;
+    private static final int CLASS_LIGHT_RAIL = 4;
+    private static final int CLASS_BUS        = 5;
+    private static final int CLASS_COACH      = 7;  // NSW TrainLink intercity/regional
+    private static final int CLASS_WALKING    = 99; // 99=Walking, 100=Walking(Footpath)
 
     private boolean hasRailLeg(List<Leg> legs) {
         return legs.stream().anyMatch(l -> {
             Integer cls = legClass(l);
             if (cls == null) return false;
             if (cls == CLASS_TRAIN || cls == CLASS_METRO || cls == CLASS_LIGHT_RAIL) return true;
-            // NSW TrainLink intercity/regional services (Blue Mountains, South Coast, Hunter,
-            // Central Coast XPT) sometimes appear as Coach (class 7) in the TfNSW Trip API
-            // even though they run on rail. Accept them when the product name signals rail.
             if (cls == CLASS_COACH) {
                 String productName = l.transportation() != null && l.transportation().product() != null
                         ? l.transportation().product().name() : null;
@@ -275,8 +265,6 @@ public class TransportNSWApiClient {
     }
 
     private boolean isBusOnly(List<Leg> legs) {
-        // Exclude walking legs (class >= 99) — they always appear in every journey and
-        // would otherwise cause allMatch to fail even for genuine bus-only routes.
         return legs.stream()
                 .filter(l -> legClass(l) != null && legClass(l) < CLASS_WALKING)
                 .allMatch(l -> legClass(l) == CLASS_BUS);
@@ -299,7 +287,6 @@ public class TransportNSWApiClient {
 
     private static final ZoneId SYDNEY_TZ = ZoneId.of("Australia/Sydney");
 
-    /** Returns the next weekday in Sydney time, skipping Saturday and Sunday. */
     private LocalDate nextSydneyWeekday() {
         LocalDate date = LocalDate.now(SYDNEY_TZ).plusDays(1);
         while (date.getDayOfWeek() == DayOfWeek.SATURDAY || date.getDayOfWeek() == DayOfWeek.SUNDAY) {
@@ -308,25 +295,16 @@ public class TransportNSWApiClient {
         return date;
     }
 
-    private HttpHeaders authHeaders() {
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "apikey " + apiKey);
-        return headers;
-    }
-
-    // Train platforms have ", Platform " in their name; bus stands use ", Stand "
     private boolean isTrainPlatform(String platformName) {
         return platformName != null && platformName.contains(", Platform ");
     }
 
-    // "Newtown Station, Platform 1, Newtown" → "Newtown Station"
     private String extractStationName(String platformName) {
         if (platformName == null) return null;
         int idx = platformName.indexOf(", Platform ");
         return idx > 0 ? platformName.substring(0, idx) : platformName;
     }
 
-    // Distance (metres) from properties → walk time in minutes at 5km/h (83m/min)
     private int distanceToWalkMins(PlatformProperties props) {
         if (props == null || props.distance() == null) return 0;
         try {
@@ -341,10 +319,10 @@ public class TransportNSWApiClient {
 
     public record TransportResult(
             String nearestTrainStation,
-            Integer trainStationWalkMins,    // null = no station found within search radius
+            Integer trainStationWalkMins,
             int numBusRoutes,
             boolean hasFerryAccess,
-            Integer cbdCommuteMinsTrain,     // null = no nearby station, so no meaningful train commute
+            Integer cbdCommuteMinsTrain,
             Integer cbdCommuteMinsBus) {
 
         public static TransportResult empty() {

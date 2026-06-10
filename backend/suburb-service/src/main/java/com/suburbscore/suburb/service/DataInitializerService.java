@@ -7,6 +7,7 @@ import com.suburbscore.suburb.enums.SydneyRegion;
 import com.suburbscore.suburb.repository.RegionRepository;
 import com.suburbscore.suburb.repository.SchoolDataRepository;
 import com.suburbscore.suburb.repository.SuburbRepository;
+import com.suburbscore.suburb.repository.SuburbStatsRepository;
 import com.suburbscore.suburb.repository.TransportDataRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,10 +25,13 @@ public class DataInitializerService {
     private final SuburbRepository suburbRepository;
     private final SchoolDataRepository schoolDataRepository;
     private final TransportDataRepository transportDataRepository;
+    private final SuburbStatsRepository suburbStatsRepository;
     private final RegionRepository regionRepository;
     private final NSWSpatialApiClient nswSpatialApiClient;
     private final SchoolDataLoaderService schoolDataLoaderService;
     private final TransportDataLoaderService transportDataLoaderService;
+    private final WalkabilityDataLoaderService walkabilityDataLoaderService;
+    private final CrimeDataLoaderService crimeDataLoaderService;
     private final TransportCorrectionService transportCorrectionService;
     private final SuburbPersistenceService suburbPersistenceService;
 
@@ -59,6 +63,22 @@ public class DataInitializerService {
         } else {
             log.info("Transport data already populated ({} rows) — applying corrections", transportCount);
             transportCorrectionService.applyCorrections();
+        }
+
+        long walkabilityCount = suburbStatsRepository.countByParksCountIsNotNull();
+        if (walkabilityCount == 0) {
+            log.info("No walkability data found — triggering async load via OpenStreetMap...");
+            walkabilityDataLoaderService.loadForAllSuburbsAsync();
+        } else {
+            log.info("Walkability data already populated ({} suburbs) — skipping", walkabilityCount);
+        }
+
+        long crimeCount = suburbStatsRepository.countByCrimeIndexIsNotNull();
+        if (crimeCount == 0) {
+            log.info("No crime data found — loading from BOCSAR CSV (last 2 years)...");
+            crimeDataLoaderService.loadCrimeData();
+        } else {
+            log.info("Crime data already populated ({} suburbs) — skipping", crimeCount);
         }
     }
 

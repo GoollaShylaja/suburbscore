@@ -160,6 +160,8 @@ osm:
 
 data:
   dir: ${DATA_DIR:./data}
+  bocsar:
+    file: ${BOCSAR_FILE:SuburbData25Q4.csv}
 
 kafka:
   topic:

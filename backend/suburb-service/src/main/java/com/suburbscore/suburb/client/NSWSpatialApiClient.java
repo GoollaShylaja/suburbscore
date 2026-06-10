@@ -3,11 +3,11 @@ package com.suburbscore.suburb.client;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.suburbscore.suburb.entity.Suburb;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.reactive.function.client.WebClient;
 
 import java.math.BigDecimal;
 import java.net.URI;
@@ -16,15 +16,18 @@ import java.util.List;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class NSWSpatialApiClient {
 
-    private final RestTemplate restTemplate;
+    private final WebClient webClient;
 
     @Value("${nsw.spatial.api.url:https://portal.spatial.nsw.gov.au/server/rest/services/NSW_Administrative_Boundaries_Theme_multiCRS/FeatureServer/2/query}")
     private String apiUrl;
 
     private static final int PAGE_SIZE = 2000;
+
+    public NSWSpatialApiClient(@Qualifier("externalWebClient") WebClient webClient) {
+        this.webClient = webClient;
+    }
 
     public List<Suburb> fetchAllNswSuburbs() {
         List<Suburb> result = new ArrayList<>();
@@ -34,16 +37,20 @@ public class NSWSpatialApiClient {
 
         while (true) {
             try {
-                URI uri = URI.create(apiUrl
+                String url = apiUrl
                         + "?where=state%3D2"
                         + "&outFields=suburbname%2Cpostcode"
                         + "&returnGeometry=false"
                         + "&returnCentroid=true"
                         + "&f=json"
                         + "&resultRecordCount=" + PAGE_SIZE
-                        + "&resultOffset=" + offset);
+                        + "&resultOffset=" + offset;
 
-                SpatialResponse response = restTemplate.getForObject(uri, SpatialResponse.class);
+                SpatialResponse response = webClient.get()
+                        .uri(URI.create(url))
+                        .retrieve()
+                        .bodyToMono(SpatialResponse.class)
+                        .block();
 
                 if (response == null || response.features() == null || response.features().isEmpty()) {
                     break;
@@ -90,7 +97,6 @@ public class NSWSpatialApiClient {
             s.setPostcode(rawPostcode.trim());
             s.setLatitude(BigDecimal.valueOf(feature.centroid().y()));
             s.setLongitude(BigDecimal.valueOf(feature.centroid().x()));
-            // region FK is assigned by DataInitializerService after regions are seeded
             return s;
         } catch (Exception e) {
             log.warn("Skipping invalid feature from NSW Spatial API: {}", e.getMessage());

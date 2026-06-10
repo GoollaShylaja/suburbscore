@@ -5,7 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.reactive.function.client.WebClient;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -16,11 +16,7 @@ import java.util.List;
 @Component
 public class NSWSchoolsApiClient {
 
-    private final RestTemplate restTemplate;
-
-    public NSWSchoolsApiClient(@Qualifier("externalRestTemplate") RestTemplate restTemplate) {
-        this.restTemplate = restTemplate;
-    }
+    private final WebClient webClient;
 
     @Value("${nsw.schools.api.url:https://data.nsw.gov.au/data/api/3/action/datastore_search}")
     private String apiUrl;
@@ -31,6 +27,10 @@ public class NSWSchoolsApiClient {
     @Value("${nsw.schools.api.page-size:1000}")
     private int pageSize;
 
+    public NSWSchoolsApiClient(@Qualifier("externalWebClient") WebClient webClient) {
+        this.webClient = webClient;
+    }
+
     /**
      * Fetches every school record in a small number of paginated bulk requests,
      * instead of one request per suburb. ~2,800 records → 3 pages at limit=1000.
@@ -40,13 +40,16 @@ public class NSWSchoolsApiClient {
         int offset = 0;
 
         while (true) {
-            URI uri = URI.create(
-                    apiUrl + "?resource_id=" + resourceId
+            String url = apiUrl + "?resource_id=" + resourceId
                     + "&limit=" + pageSize
-                    + "&offset=" + offset);
+                    + "&offset=" + offset;
 
             try {
-                DatastoreResponse response = restTemplate.getForObject(uri, DatastoreResponse.class);
+                DatastoreResponse response = webClient.get()
+                        .uri(URI.create(url))
+                        .retrieve()
+                        .bodyToMono(DatastoreResponse.class)
+                        .block();
 
                 if (response == null || !Boolean.TRUE.equals(response.success())
                         || response.result() == null || response.result().records() == null) {
@@ -60,7 +63,7 @@ public class NSWSchoolsApiClient {
                 all.addAll(page);
                 log.debug("Fetched {} school records (offset={}, total so far={})", page.size(), offset, all.size());
 
-                if (page.size() < pageSize) break; // last page
+                if (page.size() < pageSize) break;
 
                 offset += pageSize;
             } catch (Exception e) {

@@ -8,4 +8,8 @@ import java.util.UUID;
 
 public interface SuburbStatsRepository extends JpaRepository<SuburbStats, UUID> {
     Optional<SuburbStats> findBySuburbId(UUID suburbId);
+
+    long countByParksCountIsNotNull();
+
+    long countByCrimeIndexIsNotNull();
 }
